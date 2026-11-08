@@ -141,7 +141,38 @@ muchas entradas). Resuélvelos conservando tus filas.
 
 ---
 
-## 7. Licencia y distribución
+## 7. ScreenScraper (carátulas traseras, lomos y discos)
+
+**Dónde**: Settings (⚙) → **Accounts & services** → **ScreenScraper**. También en el asistente de primer arranque,
+página *Accounts* (esa solo pide usuario y contraseña).
+
+**Por qué no funciona solo con tu cuenta**: ScreenScraper exige que **cada aplicación** tenga su propio login de
+desarrollador (`devid` / `devpassword`) en cada llamada. Boxshelf lo tiene solicitado pero aún no concedido, así que
+el botón *Test* responde **"Not available yet"**. La beta.10 cambió el mensaje justo por esto.
+
+**Cómo hacerlo funcionar hoy**:
+
+1. Crea una cuenta gratuita en <https://www.screenscraper.fr/membreinscription.php>.
+2. Pide acceso de desarrollador en su foro: <https://www.screenscraper.fr/forumsujets.php?frub=12&numpage=0>
+   (Settings tiene el botón *Ask for developer access* que abre justo esa página).
+3. En Settings → ScreenScraper rellena **Developer ID** y **Developer password** con lo que te den, además de tu
+   usuario y contraseña.
+4. Pulsa **Test**: debe decir *Working · N look-ups left today*.
+
+Alternativa sin tocar la interfaz: crea `main/ss-dev.json` con `{ "devId": "…", "devPass": "…" }`. Ese archivo gana
+solo si no has escrito un Developer ID en Settings. Ya está en `.gitignore`, así que no se sube por accidente.
+
+**Qué aporta**: caras traseras, lomos, envoltorios completos y arte de disco/cartucho por región, dentro del
+**Art Studio** (`main/screenscraper.js` + `main/artstudio.js`). Las carátulas frontales salen sin cuenta de libretro,
+LaunchBox y SteamGridDB.
+
+**Límites**: la cuenta gratuita tiene un número de consultas al día (una donación lo sube). Al agotarlo, Boxshelf
+pausa hasta el día siguiente (UTC). Las credenciales se guardan cifradas (DPAPI) en `data\config.json` y nunca
+aparecen en `boxshelf.log`.
+
+---
+
+## 8. Licencia y distribución
 
 - **GPL-3.0**: puedes usar, estudiar, modificar y redistribuir. Si distribuyes un binario modificado, tienes que
   publicar el código fuente con la misma licencia y mantener los avisos de copyright.

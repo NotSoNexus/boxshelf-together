@@ -54,3 +54,5 @@ title.keys
 *.jks
 # the 3D PC model isn't part of the public source (its origin isn't recorded)
 renderer/models/*.glb
+# (local) Boxshelf's own ScreenScraper developer login, if you ever put one here: never commit it
+main/ss-dev.json
