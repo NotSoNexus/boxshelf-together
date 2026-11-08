@@ -21,13 +21,13 @@ const SOFT = 'Boxshelf';
 const UA = `Boxshelf/${(() => { try { return require('../package.json').version; } catch { return '0'; } })()}`;
 const HIT_TTL = 7 * 864e5, MISS_TTL = 864e5, HASH_MAX = 64 * 1048576, TIMEOUT = 15000, DL_TIMEOUT = 45000, MAX_GAMES = 20000, MAX_HASH = 20000;
 // ScreenScraper's console numbers (systemesListe.php) for the shelves Boxshelf has; PS4 and Steam aren't covered
-const SYS = { gc: 13, wii: 16, wiiu: 18, sw: 225, n3ds: 17, psp: 61, ps2: 58, ps3: 59, x360: 33, megadrive: 1, mastersystem: 2, nes: 3, snes: 4, gb: 9, gbc: 10, gba: 12, n64: 14, nds: 15, gamegear: 21, dreamcast: 23, saturn: 22, pcengine: 31, neogeo: 142, arcade: 75, segacd: 20, sega32x: 19, atari2600: 26, atarilynx: 28, wonderswan: 45, dos: 135, psx: 57 }; // (beta.6: the retro shelves)
+const SYS = { gc: 13, wii: 16, wiiu: 18, sw: 225, n3ds: 17, psp: 61, ps2: 58, ps3: 59, x360: 33, megadrive: 1, mastersystem: 2, nes: 3, snes: 4, gb: 9, gbc: 10, gba: 12, n64: 14, nds: 15, gamegear: 21, dreamcast: 23, saturn: 22, pcengine: 31, neogeo: 142, arcade: 75, segacd: 20, sega32x: 19, atari2600: 26, atarilynx: 28, wonderswan: 45, ngpc: 82, dos: 135, psx: 57 }; // (beta.6: the retro shelves)
 // media type → Art Studio part. box-texture is the whole wrap (back | spine | front): the spine is cut from it. (box-3D is a
 // rendered 3D box, not flat art: not offered, the same as LaunchBox's "Box - 3D")
 const PART_MEDIA = { front: ['box-2D'], back: ['box-2D-back'], spine: ['box-2D-side', 'box-texture'], disc: ['support-2D'] };
 const REGION = r => { r = String(r || '').toLowerCase(); return r === 'us' || r === 'cus' ? 'usa' : r === 'jp' ? 'jpn' : r === 'wor' ? 'world' : /^(eu|fr|de|es|it|uk|nl|pt|se|dk|fi|no|pl|gr|ru|au|nz)$/.test(r) ? 'eur' : ''; };
 const REGION_WORD = { usa: 'USA', eur: 'Europe', jpn: 'Japan', world: 'World' };
-const CART = new Set(['n3ds', 'sw', 'sw2', 'nes', 'snes', 'n64', 'gb', 'gbc', 'gba', 'nds', 'megadrive', 'mastersystem', 'gamegear', 'pcengine', 'neogeo', 'arcade', 'sega32x', 'atari2600', 'atarilynx', 'wonderswan']);
+const CART = new Set(['n3ds', 'sw', 'sw2', 'nes', 'snes', 'n64', 'gb', 'gbc', 'gba', 'nds', 'megadrive', 'mastersystem', 'gamegear', 'pcengine', 'neogeo', 'arcade', 'sega32x', 'atari2600', 'atarilynx', 'wonderswan', 'ngpc']);
 const CRED_PARAM = /^(devid|devpassword|softname|ssid|sspassword|output)$/i;
 
 let creds = () => ({}), log = () => {}, cacheFile = null, cache = null, saveT = null, fetchFn = null, matchFn = null, discIdFn = null;

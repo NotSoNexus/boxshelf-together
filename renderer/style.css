@@ -253,6 +253,7 @@ body.aside *,body.aside *::before,body.aside *::after{animation-play-state:pause
 .wm-atari2600{--wm-grad:linear-gradient(180deg,#fff0e2 10%,#c8642a 95%);--wm-glow:rgba(200,100,42,.4);--wm-tagc:#e9b896}
 .wm-atarilynx{--wm-grad:linear-gradient(180deg,#e9fbff 10%,#1f9fc4 95%);--wm-glow:rgba(31,159,196,.4);--wm-tagc:#9fd6e7}
 .wm-wonderswan{--wm-grad:linear-gradient(180deg,#f3ecff 10%,#7c4fd6 95%);--wm-glow:rgba(124,79,214,.42);--wm-tagc:#c4adee}
+.wm-ngpc{--wm-grad:linear-gradient(180deg,#f0eaff 10%,#2b2340 95%);--wm-glow:rgba(255,210,74,.38);--wm-tagc:#d9c98a} /* [AÑADIDO] Neo Geo Pocket Color */
 .wm-dos{--wm-grad:linear-gradient(180deg,#e9ffe9 10%,#2fbf4a 95%);--wm-glow:rgba(47,191,74,.4);--wm-tagc:#a3e3ae}
 .wm-home .wm-main{font-family:'Mona Sans',var(--ui);font-weight:800;letter-spacing:.1em;font-size:clamp(22px,2.4vw,34px)}
 /* favorite heart on the box corner */

@@ -30,6 +30,8 @@
       atari2600: S('atari2600', { ...cardboard, hue: 15, ratio: 0.72, depth: 0.2, caseColor: '#1b1b1d', caseSide: '#0e0e10', band: { bg: '#c8331a', fg: '#ffffff', label: 'ATARI 2600' }, spineBand: { bg: '#c8331a', fg: '#ffffff', label: 'ATARI' }, tint: ['#6b1a0c', '#180604'], glow: '#ff9a7a' }),
       atarilynx: S('atarilynx', { ...cardboard, hue: 28, ratio: 0.83, depth: 0.2, caseColor: '#16161a', caseSide: '#0c0c0f', band: { bg: '#f07c1b', fg: '#111114', label: 'ATARI LYNX' }, spineBand: { bg: '#111114', fg: '#f07c1b', label: 'LYNX' }, tint: ['#6b360a', '#180c02'], glow: '#ffc08a' }),
       wonderswan: S('wonderswan', { ...cardboard, hue: 190, ratio: 0.83, depth: 0.2, caseColor: '#eef1f4', caseSide: '#cfd5db', spineInk: '#1f3d4f', band: { bg: '#1f7fa8', fg: '#ffffff', label: 'WONDERSWAN' }, spineBand: { bg: '#1f7fa8', fg: '#ffffff', label: 'WS' }, tint: ['#14506b', '#04121a'], glow: '#8ad8ff' }),
+      // [AÑADIDO] Neo Geo Pocket Color: caja de cartón con la franja morada y letras doradas de SNK
+      ngpc: S('ngpc', { ...cardboard, hue: 265, ratio: 0.83, depth: 0.2, caseColor: '#e9e6f4', caseSide: '#c9c4dc', spineInk: '#2b2340', band: { bg: '#2b2340', fg: '#ffd24a', label: 'NEO GEO POCKET' }, spineBand: { bg: '#2b2340', fg: '#ffd24a', label: 'NGPC' }, tint: ['#3a2a6b', '#0d0820'], glow: '#c9b3ff' }),
       dos: S('dos', { ...cardboard, hue: 120, ratio: 0.78, depth: 0.26, caseColor: '#141614', caseSide: '#0a0b0a', band: { bg: '#0a0b0a', fg: '#7dff8a', label: 'MS-DOS' }, spineBand: { bg: '#0a0b0a', fg: '#7dff8a', label: 'DOS' }, tint: ['#1f5a24', '#071408'], glow: '#9dffa8' })
     },
     wordmarks: {
@@ -39,7 +41,7 @@
       megadrive: ['Genesis', 'Home console'], mastersystem: ['Master System', 'Home console'], gamegear: ['Game Gear', 'Handheld'],
       pcengine: ['TurboGrafx-16', 'Home console'], neogeo: ['Neo Geo', 'Arcade'], arcade: ['Arcade', 'Coin-op'],
       segacd: ['Sega CD', 'Home console'], sega32x: ['32X', 'Home console'], atari2600: ['Atari 2600', 'Home console'], atarilynx: ['Lynx', 'Handheld'],
-      wonderswan: ['WonderSwan', 'Handheld'], dos: ['DOS', 'PC classics']
+      wonderswan: ['WonderSwan', 'Handheld'], ngpc: ['Neo Geo Pocket', 'Handheld'], dos: ['DOS', 'PC classics']
     },
     media: {
       nes: { kind: 'cart', size: 0.5, drive: 'slot' }, snes: { kind: 'cart', size: 0.5, drive: 'slot' }, n64: { kind: 'cart', size: 0.5, drive: 'slot' },
@@ -49,7 +51,7 @@
       arcade: { kind: 'cart', size: 0.5, drive: 'slot' },
       psx: { kind: 'disc', size: 0.7, drive: 'top' }, dreamcast: { kind: 'disc', size: 0.7, drive: 'top' }, saturn: { kind: 'disc', size: 0.7, drive: 'top' },
       segacd: { kind: 'disc', size: 0.7, drive: 'top' }, sega32x: { kind: 'cart', size: 0.5, drive: 'slot' }, atari2600: { kind: 'cart', size: 0.5, drive: 'slot' },
-      atarilynx: { kind: 'cart', size: 0.42, drive: 'slot' }, wonderswan: { kind: 'cart', size: 0.42, drive: 'slot' }, dos: { kind: 'cart', form: 'floppy', size: 0.5, drive: 'slot' } /* (beta.11) a 3.5" floppy, not a CD: handled like a cartridge (no spin), drawn as a floppy */
+      atarilynx: { kind: 'cart', size: 0.42, drive: 'slot' }, wonderswan: { kind: 'cart', size: 0.42, drive: 'slot' }, ngpc: { kind: 'cart', size: 0.4, drive: 'slot' }, dos: { kind: 'cart', form: 'floppy', size: 0.5, drive: 'slot' } /* (beta.11) a 3.5" floppy, not a CD: handled like a cartridge (no spin), drawn as a floppy */
     }
   };
   Object.assign(window.BS_SYSTEMS_EXTRA.wordmarks, window.BS_WORDMARK_OVERRIDES || {}); // a platform can rename a shelf (Android: Media → Apps)

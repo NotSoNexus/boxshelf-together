@@ -102,11 +102,11 @@ function read(found) {
 // Playnite's platform ids (SpecificationId) to Boxshelf's consoles; a platform without one is matched by its name
 const SPEC = { nintendo_gamecube: 'gc', nintendo_wii: 'wii', nintendo_wiiu: 'wiiu', nintendo_switch: 'sw', sony_psp: 'psp', sony_playstation: 'psx', sony_playstation2: 'ps2', sony_playstation3: 'ps3', sony_playstation4: 'ps4', sony_playstation5: 'ps5',
   xbox360: 'x360', nintendo_3ds: 'n3ds', nintendo_nes: 'nes', nintendo_super_nes: 'snes', nintendo_64: 'n64', nintendo_gameboy: 'gb', nintendo_gameboycolor: 'gbc', nintendo_gameboyadvance: 'gba', nintendo_ds: 'nds',
-  sega_genesis: 'megadrive', sega_mastersystem: 'mastersystem', sega_gamegear: 'gamegear', sega_dreamcast: 'dreamcast', sega_saturn: 'saturn', nec_turbografx_16: 'pcengine', nec_pcengine: 'pcengine', snk_neogeo_aes: 'neogeo', snk_neogeo: 'neogeo',
+  sega_genesis: 'megadrive', sega_mastersystem: 'mastersystem', sega_gamegear: 'gamegear', sega_dreamcast: 'dreamcast', sega_saturn: 'saturn', nec_turbografx_16: 'pcengine', nec_pcengine: 'pcengine', snk_neogeo_aes: 'neogeo', snk_neogeo: 'neogeo', snk_neogeo_pocket: 'ngpc', snk_neogeo_pocket_color: 'ngpc',
   sega_cd: 'segacd', sega_32x: 'sega32x', atari_2600: 'atari2600', atari_lynx: 'atarilynx', bandai_wonderswan: 'wonderswan', bandai_wonderswan_color: 'wonderswan', pc_dos: 'dos', pc_windows: 'pc', arcade: 'arcade' };
 const BY_NAME = [[/gamecube/i, 'gc'], [/wii ?u/i, 'wiiu'], [/\bwii\b/i, 'wii'], [/switch/i, 'sw'], [/\bpsp\b|portable/i, 'psp'], [/playstation 5|ps5/i, 'ps5'], [/playstation 4|ps4/i, 'ps4'], [/playstation 3|ps3/i, 'ps3'], [/playstation 2|ps2/i, 'ps2'], [/playstation|psx|ps1/i, 'psx'],
   [/xbox 360/i, 'x360'], [/3ds/i, 'n3ds'], [/\bds\b/i, 'nds'], [/game ?boy advance|gba/i, 'gba'], [/game ?boy color|gbc/i, 'gbc'], [/game ?boy/i, 'gb'], [/super n|snes|super famicom/i, 'snes'], [/nintendo 64|n64/i, 'n64'], [/\bnes\b|famicom|nintendo entertainment/i, 'nes'],
-  [/genesis|mega ?drive/i, 'megadrive'], [/master system/i, 'mastersystem'], [/game ?gear/i, 'gamegear'], [/dreamcast/i, 'dreamcast'], [/saturn/i, 'saturn'], [/turbografx|pc engine/i, 'pcengine'], [/neo ?geo/i, 'neogeo'], [/sega cd|mega cd/i, 'segacd'], [/32x/i, 'sega32x'],
+  [/genesis|mega ?drive/i, 'megadrive'], [/master system/i, 'mastersystem'], [/game ?gear/i, 'gamegear'], [/dreamcast/i, 'dreamcast'], [/saturn/i, 'saturn'], [/turbografx|pc engine/i, 'pcengine'], [/neo ?geo pocket/i, 'ngpc'], [/neo ?geo/i, 'neogeo'], [/sega cd|mega cd/i, 'segacd'], [/32x/i, 'sega32x'],
   [/2600/i, 'atari2600'], [/lynx/i, 'atarilynx'], [/wonderswan/i, 'wonderswan'], [/dos/i, 'dos'], [/arcade|mame/i, 'arcade'], [/windows|\bpc\b/i, 'pc']];
 const EMPTY = '00000000-0000-0000-0000-000000000000';
 function plan(lib, found) {

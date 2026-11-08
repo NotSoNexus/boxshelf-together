@@ -8,7 +8,7 @@ const { appRoot, isFile } = require('./paths');
 const LOGO_EXT = ['png', 'svg', 'webp', 'jpg'];
 const BOOT_EXT = ['mp4', 'webm', 'mov'];
 const MODEL_EXT = ['glb', 'gltf'];
-const MEDIA_NAME = { sw: 'cart', pcengine: 'cart', neogeo: 'cart', arcade: 'cart', sega32x: 'cart', atari2600: 'cart', atarilynx: 'cart', wonderswan: 'cart', sw2: 'cart', n3ds: 'cart', psp: 'umd', nes: 'cart', snes: 'cart', n64: 'cart', gb: 'cart', gbc: 'cart', gba: 'cart', nds: 'cart', megadrive: 'cart', mastersystem: 'cart', gamegear: 'cart' }; // everything else: disc
+const MEDIA_NAME = { sw: 'cart', pcengine: 'cart', neogeo: 'cart', arcade: 'cart', sega32x: 'cart', atari2600: 'cart', atarilynx: 'cart', wonderswan: 'cart', ngpc: 'cart', sw2: 'cart', n3ds: 'cart', psp: 'umd', nes: 'cart', snes: 'cart', n64: 'cart', gb: 'cart', gbc: 'cart', gba: 'cart', nds: 'cart', megadrive: 'cart', mastersystem: 'cart', gamegear: 'cart' }; // everything else: disc
 
 const KINDS = ['logo', 'boot', 'console', 'model', 'media', 'controller'];
 // the console's own media name first; a hand-placed disc.glb on a cart console (or the reverse) still shows, and Remove takes it too

@@ -180,6 +180,10 @@ const CONSOLES = [
     ['atari2600', 'Atari 2600', 'RetroArch', [], [], ['atari2600', 'atari 2600', '2600', 'a2600'], ['a26', 'bin', 'zip', '7z'], '', 'stella'],
     ['atarilynx', 'Lynx', 'RetroArch', [], [], ['atarilynx', 'lynx', 'atari lynx'], ['lnx', 'zip', '7z'], '', 'handy'],
     ['wonderswan', 'WonderSwan', 'RetroArch', [], [], ['wonderswan', 'wonderswancolor', 'wonderswan color', 'wsc', 'ws'], ['ws', 'wsc', 'zip', '7z'], '', 'mednafen_wswan'],
+    // [AÑADIDO] Neo Geo Pocket / Color: solo RetroArch (core mednafen_ngp), sin BIOS. Quita o cambia esta línea para
+    // quitar el estante; el resto de sus datos está marcado con [AÑADIDO] en covers.js, screenscraper.js, manuals.js,
+    // commercials.js, modelfind.js, themes.js, addgames.js, renderer/systems-extra.js, renderer/style.css y renderer/setup.js
+    ['ngpc', 'Neo Geo Pocket Color', 'RetroArch', [], [], ['ngpc', 'ngp', 'neogeo pocket', 'neo geo pocket', 'neogeo pocket color', 'neo geo pocket color'], ['ngpc', 'ngp', 'zip', '7z'], '', 'mednafen_ngp'],
     ['dos', 'DOS', 'RetroArch', [], [], ['dos', 'msdos', 'ms-dos', 'pc dos'], ['zip', 'dosz'], '', 'dosbox_pure'],
   ])
 ];
