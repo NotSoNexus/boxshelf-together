@@ -335,6 +335,7 @@ function createWindow() {
     show: false, // shown once its first frame (the logo) is painted: no empty or half-drawn window while it starts
     autoHideMenuBar: true,
     title: 'Boxshelf',
+    icon: path.join(__dirname, 'renderer', 'app-icon.ico'), // (local) the window/taskbar icon; without it Electron's atom shows
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   win.once('ready-to-show', () => { if (alive() && !win.isVisible()) win.show(); });
@@ -1035,8 +1036,9 @@ async function cropBoth(file) {
 }
 // Spine of a full box wrap, cut in the same hidden image window. Case shapes (front width and spine thickness, both
 // relative to the case's height): DVD-style cases 135x190x14 mm, Wii U 135x190x11, Blu-ray 135x171x12, Switch
-// 105x170x10, PSP 104x180x14, 3DS 136x121x13.5 (wider than tall)
-const CASE = { gc: [.711, .074], wii: [.711, .074], ps2: [.711, .074], x360: [.711, .074], wiiu: [.711, .058], ps3: [.789, .07], ps4: [.789, .07], ps5: [.789, .07], sw: [.618, .059], sw2: [.618, .059], psp: [.578, .078], n3ds: [1.127, .112] };
+// 105x170x10, PSP 104x180x14, 3DS 136x121x13.5 (wider than tall). DS (beta.10 left it out, so a DS wrap was cut with
+// GameCube's shape): same shell as the 3DS, 136x121x14.
+const CASE = { gc: [.711, .074], wii: [.711, .074], ps2: [.711, .074], x360: [.711, .074], wiiu: [.711, .058], ps3: [.789, .07], ps4: [.789, .07], ps5: [.789, .07], sw: [.618, .059], sw2: [.618, .059], psp: [.578, .078], n3ds: [1.127, .112], nds: [1.127, .116] };
 async function spineCut(file, sysId, part) { // part 'back' (1.71): the back panel left of the spine, from the same fold search
   const [front, spine] = CASE[sysId] || CASE.gc;
   const r = await helperJob('img-tools.html', async () => { const b = await fs.promises.readFile(file); return { data: new Uint8Array(b.buffer, b.byteOffset, b.length), mode: 'spine', front, spine, part: part === 'back' ? 'back' : 'spine' }; }, 30000, true);

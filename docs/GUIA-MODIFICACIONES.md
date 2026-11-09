@@ -14,8 +14,17 @@ tocar el código. Está en la rama **`mi-version`**, partiendo del tag `v1.82.0-
 |---|---|
 | `Mi Boxshelf.bat` | Usa el Node portable de `.tools\node` y arranca a pantalla completa |
 | `Mi Boxshelf.bat ventana` | Lo mismo, en una ventana (mejor para depurar) |
+| `Boxshelf.lnk` | Acceso directo con el icono de la app (consola minimizada) |
 | `Start Boxshelf.bat` | El original: necesita Node en el `PATH` del sistema |
 | `node scripts/check-mods.js` | Comprobación rápida de que las tablas están coherentes |
+
+**Icono**: la ventana usa `renderer/app-icon.ico` (en `main.js`, `createWindow`) y el proceso se identifica en Windows
+como `io.github.boxshelf`, para que la barra de tareas muestre el icono de Boxshelf y no el átomo de Electron.
+Si cambias el dibujo, sustituye `renderer/app-icon.png` (256×256) y regenera el `.ico` con:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\make-icon.ps1
+```
 
 `node_modules` ya está instalado (Electron incluido). Si algo se rompe: borra `node_modules` y vuelve a lanzar el `.bat`.
 
