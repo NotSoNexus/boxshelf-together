@@ -141,7 +141,7 @@ muchas entradas). Resuélvelos conservando tus filas.
 
 ---
 
-## 7. ScreenScraper (carátulas traseras, lomos y discos)
+## 7. Cuentas y servicios (ScreenScraper, fanart.tv)
 
 **Dónde**: Settings (⚙) → **Accounts & services** → **ScreenScraper**. También en el asistente de primer arranque,
 página *Accounts* (esa solo pide usuario y contraseña).
@@ -169,6 +169,25 @@ LaunchBox y SteamGridDB.
 **Límites**: la cuenta gratuita tiene un número de consultas al día (una donación lo sube). Al agotarlo, Boxshelf
 pausa hasta el día siguiente (UTC). Las credenciales se guardan cifradas (DPAPI) en `data\config.json` y nunca
 aparecen en `boxshelf.log`.
+
+### fanart.tv
+
+**Dónde**: Settings → **Accounts & services** → **fanart.tv** → campo *Key* (también en el asistente, página
+*Accounts* → *More*).
+
+**Para qué sirve en Boxshelf**: solo para la **impresión oficial del disco de las películas** del estante de cine
+(Stremio), prefiriendo Blu-ray. Lo usa `main/stremio.js` (`fanartDisc`, endpoint `v3/movies/<imdb>`). Las carátulas y
+los fondos de película vienen de otro sitio; sin clave, Boxshelf imprime el disco él mismo.
+
+**Cómo conseguirla**: cuenta gratuita en <https://fanart.tv> y luego <https://fanart.tv/get-an-api-key/> (el botón
+*Get a key* de Settings abre esa página). Se pide una clave **personal**: nombre del proyecto, descripción, URL y
+correo. La aprueban a mano; suele tardar unos días. La clave aparece en tu perfil de fanart.tv.
+
+**Comprobar**: botón **Test**. Consulta `tt0111161` y responde *Key works*; si sale *Key not accepted* es 401/403
+(clave mal copiada o revocada).
+
+**Ojo**: es una clave personal y **no comercial**; si algún día distribuyes tu versión con ánimo de lucro necesitas
+licencia de pago. No se usa en la versión de Android.
 
 ---
 
