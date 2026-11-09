@@ -1,7 +1,7 @@
 # Guía de modificaciones (copia local)
 
-Este repo es una copia de **Boxshelf 1.82.0-beta.10** (`sassiestrhihno/boxshelf-source`, GPL-3.0) preparada para
-tocar el código. Está en la rama **`mi-version`**, partiendo del tag `v1.82.0-beta.10`.
+Este repo es una copia de **Boxshelf 1.82.0-beta.11** (`sassiestrhihno/boxshelf-source`, GPL-3.0) preparada para
+tocar el código. Está en la rama **`mi-version`**, partiendo del tag `v1.82.0-beta.11`.
 
 > Todo lo que he añadido está marcado con `[AÑADIDO]` en los comentarios: busca ese texto para encontrar (o quitar)
 > los cambios de ejemplo.
@@ -139,14 +139,13 @@ carpeta **no** está en el repo: la creas tú.
 El repo del autor es un *snapshot* por versión, así que cada beta es un commit nuevo. Para traerla:
 
 ```powershell
-git fetch --unshallow      # una sola vez: el clon es superficial
 git fetch --tags
-git log --oneline --all --decorate -5
-git merge v1.82.0-beta.11  # o el tag que salga
+git rebase v1.82.0-beta.11   # o el tag que salga
 ```
 
 Los conflictos aparecerán casi seguro en `main/systems.js` y `renderer/systems-extra.js` (son líneas largas con
-muchas entradas). Resuélvelos conservando tus filas.
+muchas entradas). Resuélvelos conservando tus filas (el `ngpc`, el `nds` del `CASE`, etc.) **y** los cambios nuevos
+del autor (por ejemplo, en beta.11 `dos` pasó de disco a disquete). Después: `git add .` y `git rebase --continue`.
 
 ---
 
