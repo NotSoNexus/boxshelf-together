@@ -1,8 +1,18 @@
-# Boxshelf
+# Boxshelf Together 🎮
 
-A TV-style launcher for your emulators, Steam games and streaming apps: real box art on a 3D shelf,
-cases you can open and inspect, disc-loading animations, manuals, RetroAchievements, and one controller
-for everything.
+Un fork de Boxshelf enfocado en conectar jugadores: perfiles locales personalizables, lista de amigos y sistema online para compartir tus sesiones retro.
+
+Basado en **Boxshelf 1.82.0-beta.12** (`sassiestrhihno/boxshelf-source`, GPL-3.0).
+
+### ✨ Características añadidas:
+- 👥 **Perfiles Locales:** Crea y cambia entre perfiles de jugador con foto de perfil, banner y biografía personalizada.
+- 🌐 **Boxshelf Online:** Conexión con amigos mediante Códigos de Amigo (Friend Codes) y servidor de presencia en tiempo real.
+- 🚀 **Navegación Fluida:** Animaciones de retorno suaves entre menús, compatible con mandos (Xbox, PlayStation, Switch y genéricos).
+- ⚙️ **Configuración Sencilla:** Ajusta tu servidor online y gestiona tus perfiles directamente desde los ajustes del Shelf.
+
+---
+
+## Boxshelf Original
 
 > **This is Boxshelf's source code** (Windows: Electron; Android: Capacitor, in `android-app\`), released under the
 > [GNU GPL v3.0](LICENSE). **Just want to play?** Get the ready-made download from the

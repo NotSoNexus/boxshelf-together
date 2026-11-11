@@ -1,8 +1,8 @@
 {
   "name": "boxshelf",
-  "productName": "Boxshelf",
+  "productName": "Boxshelf Together",
   "version": "1.82.0-beta.12",
-  "description": "TV-style launcher for emulators, Steam and media apps",
+  "description": "Un fork de Boxshelf enfocado en conectar jugadores: perfiles locales personalizables, lista de amigos y sistema online para compartir tus sesiones retro",
   "license": "GPL-3.0-only",
   "main": "main.js",
   "private": true,
