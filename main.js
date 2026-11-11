@@ -17,6 +17,8 @@ const linuxpad = require('./main/linuxpad'); // (beta.9) Linux: hold Select + St
 paths.setAppRoot(linux.isLinux ? linux.appRoot(app.isPackaged, __dirname) : app.isPackaged ? (process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath)) : __dirname);
 
 const config = require('./main/config');
+const profiles = require('./main/profiles');
+const online = require('./main/online');
 const { CONSOLES, APPS } = require('./main/systems');
 const { detectAll, detectSystem, findSteam } = require('./main/detect');
 const { scanSystem: scanFolders, scanSystemAsync: scanFoldersAsync, forget: scanForget, setLog: scanSetLog } = require('./main/scanner'); // (beta.9: scanForget clears the scanner's kept scans)
@@ -77,7 +79,7 @@ let win = null;
 let history = null, histFile = null, histOpen = null;
 // a map with no prototype: an id like "__proto__" from the page is just a key here
 function loadHistory() {
-  if (history) return history; histFile = path.join(app.getPath('userData'), 'history.json'); history = Object.create(null);
+  if (history) return history; histFile = profiles.dataFile('history.json'); history = Object.create(null);
   let raw = null; try { raw = fs.readFileSync(histFile, 'utf8'); } catch {}
   if (raw != null) { try { const o = JSON.parse(raw); if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) if (v && typeof v === 'object') history[k] = histEntry(v); }
     catch (e) { try { fs.copyFileSync(histFile, histFile + '.corrupt-' + Date.now()); } catch {} log('history unreadable, kept a copy', e.message); } }
@@ -296,7 +298,7 @@ async function serveFile(request) {
     const u = new URL(request.url);
     const file = path.resolve(decodeURIComponent(u.pathname.replace(/^\//, '')));
     const lower = file.toLowerCase();
-    if (!allowedRoots().some(r => lower.startsWith(r)) && !previewOk.has(lower) && !lower.startsWith(path.join(app.getPath('userData'), 'previews').toLowerCase() + path.sep)) return new Response('Not allowed', { status: 403 }); // (beta.7: a preview video found for a game, the Steam clips)
+    if (!allowedRoots().some(r => lower.startsWith(r)) && !previewOk.has(lower) && !lower.startsWith(path.join(app.getPath('userData'), 'previews').toLowerCase() + path.sep) && !profiles.isImage(file)) return new Response('Not allowed', { status: 403 }); // (beta.7: a preview video found for a game, the Steam clips) (profile pictures and banners are picked from anywhere, so they pass here too)
     const stat = await fs.promises.stat(file);
     const type = MIME[path.extname(file).slice(1).toLowerCase()] || 'application/octet-stream';
     const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'max-age=3600' };
@@ -595,6 +597,7 @@ function onExit(info) {
   if (quick) { const def = CONSOLES.find(c => c.id === lastLaunch.systemId); info = { ...info, quick: true, emulatorName: (def && def.emulatorName) || 'The emulator', flatpakFix: flatpakFix(lastLaunch) }; log('Emulator closed right away:', info.emulatorName, 'code', info.code, info.ms + ' ms'); }
   if (quitAt) { log('game closed', Date.now() - quitAt, 'ms after Quit' + (Date.now() - quitAt > 2400 ? ' (had to be forced)' : '')); quitAt = 0; }
   padwatch.stop(); homemenu.end(); if (info && (info.failedToStart || info.quick)) historyUndo(); else historyEnd();
+  setTimeout(() => { try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner, playing: '' }); } catch {} }, 1500); // the profile's hours land on the server quietly
   if (coverTimer && coverTimer.keep) clearInterval(coverTimer.keep);
   // the emulator died inside the cover window: undo the temporary fullscreen too
   if (coverWindowed && alive()) { try { win.setFullScreen(false); } catch {} coverWindowed = false; }
@@ -865,7 +868,7 @@ function wmStart() {
     onConnect: on => { wm.on = on; if (!on) { wm.seen = false; wm.b = 0; if (wm.aMouse && alive()) { wm.aMouse = false; try { win.webContents.sendInputEvent({ type: 'mouseUp', x: wm.px, y: wm.py, button: 'left', clickCount: 1 }); } catch {} } } if (alive()) win.webContents.send('wiimote', { on, seen: false, b: 0 }); } });
 }
 // the real controllers plugged in (the shelf's button prompts for XInput pads: main/padsense.js)
-handle('pads:present', () => padsense.list());
+handle('pads:present', (force) => padsense.list(force === true));
 ipcMain.on('wm:rumble', (e, ms) => { if (wm.on && !launcher.isRunning()) wiimote.rumble(Math.max(10, Math.min(80, +ms || 25))); });
 // the shelf sends its live prompt style and confirm swap (Confirm "Match my controller" follows the pad in use)
 let shelfSummary = '', shelfGlyphs = 'xbox', shelfSwap = false;
@@ -894,7 +897,34 @@ function handle(name, fn) {
 // pressed (the page itself may not read the clipboard). Never logged.
 handle('clipboard:text', () => { const { clipboard } = require('electron'); return String(clipboard.readText() || '').split(/\r?\n/)[0].trim().slice(0, 512); });
 
-handle('config:get', () => ({ config: cfg, consoles: CONSOLES, apps: APPS, appRoot: paths.appRoot(), version: app.getVersion(), hasInfo: covers.hasInfo(), settingsBlocked: config.blocked() }));
+  handle('config:get', () => ({ config: cfg, consoles: CONSOLES, apps: APPS, appRoot: paths.appRoot(), version: app.getVersion(), hasInfo: covers.hasInfo(), settingsBlocked: config.blocked(), profile: profiles.current() }));
+  handle('profiles:list', () => profiles.list());
+  handle('profiles:create', ({ name }) => profiles.create(name, config.file()));
+  handle('profiles:update', ({ id, patch }) => { profiles.update(String(id || ''), patch && typeof patch === 'object' ? patch : {}); setTimeout(() => { try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner }); } catch {} }, 2500); }); // an edited profile (picture included) reaches the server by itself
+  handle('profiles:stage', ({ file }) => profiles.stage(file)); // a just-picked picture, served before the profile is saved
+
+  // ---------- Boxshelf Online (perfiles y amigos; el internet va solo por aquí, la página no habla https) ----------
+  online.init(profiles, config, log);
+  const onlineSyncData = () => { let totalMs = 0; try { for (const v of Object.values(loadHistory())) totalMs += Math.max(0, +v.ms || 0); } catch {} return { totalMs, favorites: (cfg.ui && cfg.ui.favorites) || [] }; };
+  handle('online:status', () => online.status());
+  handle('online:setServer', ({ url }) => online.setServer(url));
+  handle('online:register', ({ name }) => online.register(name));
+  handle('online:sync', () => { const p = profiles.current(); return online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner }); });
+  handle('online:upload', ({ kind, data }) => online.upload(kind, data));
+  handle('online:friends', () => online.friends());
+  handle('online:friendAdd', ({ code }) => online.add(code));
+  handle('online:friendRemove', ({ code }) => online.remove(code));
+  handle('online:view', ({ code }) => online.view(code));
+  handle('profiles:select', ({ id }) => {
+    if (launcher.isRunning()) throw new Error('Cierra el juego antes de cambiar de perfil.');
+    config.flush(); profiles.select(String(id || '')); config.useFile(profiles.configFile());
+    cfg = unsealed(config.load()); history = null; histFile = null; histOpen = null; scanForget(); lastLib = null;
+    try { artstudio.forget(); } catch {}
+    ra.setCredentials(cfg.ra && cfg.ra.enabled !== false ? cfg.ra.user : '', cfg.ra && cfg.ra.key);
+    return profiles.current(); // the screen reloads itself: a scan here would only hold that up (start() scans for the new profile)
+  });
+  // The screen asks for a reload here: a page-initiated location.reload() never happens (will-navigate is blocked).
+  handle('app:reload', () => { setTimeout(() => { try { if (alive() && win && !win.isDestroyed()) win.webContents.reload(); } catch {} }, 120); return true; });
 // (1.82) Settings → About: the newest beta (force: ask GitHub now, not the answer from this start) and the page's links
 handle('app:updateCheck', ({ force } = {}) => updates.check(app.getVersion(), !!force).then(r => ({ ...r, links: updates.LINKS })));
 // (beta.12) the screen mode and the window's place are main's own (F11, Settings → Screen mode): a screen's older copy saved later doesn't undo them
@@ -933,7 +963,7 @@ const emanualSeen = new Map();
 async function emanualPagesAsync(g) { try { const f = (g.art.manual || [])[0]; if (!f) return false; const st = await fs.promises.stat(f), k = Math.floor(st.mtimeMs) + '|' + st.size, c = emanualSeen.get(f); if (c && c.k === k) return c.v;
   const z = await spreads.sizeOfAsync(f), v = !!z && z[0] % 688 === 0 && z[0] <= 2064 && z[1] > z[0] * 1.2; if (emanualSeen.size > 5000) emanualSeen.clear(); emanualSeen.set(f, { k, v }); return v; } catch { return false; } }
 async function withCoverAsync(sysId, g, pages) { return sysId === 'wiiu' && pages.length && g.art.front && (wiiumanual.generated(g.title) || await emanualPagesAsync(g)) && !manualstudio.chosen(sysId, g.file) ? [fileUrl(g.art.front), ...pages] : pages; }
-const libCacheFile = () => path.join(app.getPath('userData'), 'library-cache.json');
+const libCacheFile = () => path.join(path.dirname(profiles.configFile()), 'library-cache.json'); // per profile, like history
 // temp (own name per write: two scans can finish together) + rename: a crash mid-write never leaves a cut-off file behind
 let atomicN = 0;
 async function writeAtomic(file, data) { const tmp = `${file}.${process.pid}-${++atomicN}.tmp`; try { await fs.promises.writeFile(tmp, data); await fs.promises.rename(tmp, file); } catch (e) { fs.promises.unlink(tmp).catch(() => {}); throw e; } }
@@ -950,11 +980,11 @@ const scanOnce = () => {
   scanning = run.finally(() => { if (scanning === mine) scanning = null; }); const mine = scanning; scanCfg = scanSig();
   return scanning;
 };
-handle('library:scan', async (arg) => { const lib = await scanOnce(), json = JSON.stringify(lib); lastLib = lib; artstudio.forget();
+handle('library:scan', async (arg) => { const cacheFile = libCacheFile(); /* the profile can change while this scan runs */ const lib = await scanOnce(), json = JSON.stringify(lib); lastLib = lib; artstudio.forget();
   // ifChanged: the shelf already shows last session's library; when nothing changed, say so instead of sending the
   // whole library (about a megabyte) back for the screen to unpack and compare, which stalled the shelf as it appeared
-  let same = false; if (arg && arg.ifChanged) { try { same = (await fs.promises.readFile(libCacheFile(), 'utf8')) === json; } catch {} }
-  if (!same) writeAtomic(libCacheFile(), json).catch(() => {}); setTimeout(() => autoCovers(lib), 1500); setTimeout(() => steamFill(lib), 2500); setTimeout(() => wiiuManuals(lib), 3500); setTimeout(() => autoManuals(lib), 6000); return same ? { unchanged: true } : lib; });
+  let same = false; if (arg && arg.ifChanged) { try { same = (await fs.promises.readFile(cacheFile, 'utf8')) === json; } catch {} }
+  if (!same) writeAtomic(cacheFile, json).catch(() => {}); setTimeout(() => autoCovers(lib), 1500); setTimeout(() => steamFill(lib), 2500); setTimeout(() => wiiuManuals(lib), 3500); setTimeout(() => autoManuals(lib), 6000); return same ? { unchanged: true } : lib; });
 // Wii U e-manuals: turn each game's built-in manual into reader pages (once per game, in a hidden window)
 let wiiuBusy = false;
 async function wiiuManuals(lib) {
@@ -2831,7 +2861,9 @@ if (firstInstance) app.whenReady().then(() => { try { startUp(); } catch (e) {
 } });
 function startUp() {
   if (session && session.defaultSession) denyPermissions(session.defaultSession);
-  config.init(app.getPath('userData'), log);
+    config.init(app.getPath('userData'), log);
+    profiles.init(app.getPath('userData'), log);
+    config.useFile(profiles.configFile());
   arcadenames.init(app.getPath('userData'), log); // (beta.7) arcade game names, main/arcadenames.js
   emusetup.init({ log, dataDir: app.getPath('userData'), appRoot: paths.appRoot() }); racores.init({ log }); previews.init({ log, dataDir: app.getPath('userData'), appRoot: paths.appRoot() }); ytclips.init({ log, dataDir: app.getPath('userData') }); addgames.init({ log });
   cfg = unsealed(config.load()); { const fx = fixXenia(cfg); if (fx !== cfg) { cfg = fx; try { persistCfg(cfg); } catch {} } } applyArtLibrary();

@@ -4,6 +4,7 @@ const { CONSOLES, APPS } = require('./systems');
 
 let FILE = null, log = () => {};
 function init(userDataDir, logger) { FILE = path.join(userDataDir, 'config.json'); if (logger) log = logger; }
+function useFile(file) { FILE = file; readBlocked = false; }
 
 function defaults() {
   const systems = {};
@@ -308,4 +309,4 @@ function sanitizeArt(a, ui) {
 // settings coming back from the screen: same shape rules as a loaded file (a missing or broken section gets its defaults)
 function normalize(c) { if (!isObj(c)) throw new Error('Not a settings object.'); return sanitize(merge(defaults(), c)); }
 
-module.exports = { init, load, save, flush, defaults, normalize, sanitize, GAME_STATUS, file: () => FILE, blocked: () => readBlocked, ART, defaultArtStyle, cleanArtStyle, sanitizeArt };
+module.exports = { init, useFile, load, save, flush, defaults, normalize, sanitize, GAME_STATUS, file: () => FILE, blocked: () => readBlocked, ART, defaultArtStyle, cleanArtStyle, sanitizeArt };

@@ -18,6 +18,11 @@
 !/docs/
 !/shared/
 !/android-app/
+!/online/
+online/data/
+online/worker/.wrangler/
+online/worker/wrangler.toml
+.wrangler/
 !/linux/
 !/scripts/
 !/release-extras/

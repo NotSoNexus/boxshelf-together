@@ -44,6 +44,7 @@ let win = null, padwatch = null, log = () => {}, onQuit = () => {}, onPower = ()
 let session = null; // { meta, keys, startedAt, open, paused }
 let shelf = null;   // the shelf version of the menu while it's open: { open: true }
 let hideT = null;
+let topGuard = null;
 
 let getMainWin = () => null;
 // the screen Boxshelf itself is on (a TV set up as the second display), not always the primary one
@@ -68,7 +69,7 @@ function ensureWindow() {
     webPreferences: { preload: path.join(__dirname, '..', 'preload-home.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
   win.setIgnoreMouseEvents(true);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'home.html'));
-  win.on('closed', () => { win = null; });
+  win.on('closed', () => { stopTopGuard(); win = null; });
   // (beta.9) the overlay's own page crashed (it did once, the moment the menu opened on the shelf): the controller then went
   // to a dead window, the shelf waited for a menu that never closed, and the Home button found it "already open". Now the
   // dead window goes, the menu closes the normal way (Resume: the controller back to the shelf or the game, a paused game
@@ -76,7 +77,7 @@ function ensureWindow() {
   win.webContents.on('render-process-gone', (e, d) => {
     if (d && d.reason === 'clean-exit') return;
     log('home menu: its page crashed (' + (d && d.reason) + ' ' + (d && d.exitCode) + '): closing the menu so the controller works again');
-    const w = win; win = null; clearTimeout(hideT);
+    const w = win; win = null; clearTimeout(hideT); stopTopGuard();
     try { if (w && !w.isDestroyed()) w.destroy(); } catch {}
     if ((session && session.open) || shelf) { try { act('resume'); } catch (err) { log('home menu: resume after the crash failed', err.message); shelf = null; if (session) session.open = false; try { padwatch.setMenu(false); } catch {} } }
   });
@@ -87,8 +88,32 @@ function ensureWindow() {
 const overApp = () => !!(session && session.meta && session.meta.systemId === 'media');
 function takeFocus() { if (!overApp() || !win || win.isDestroyed()) return; try { win.setFocusable(true); const b = win.getNativeWindowHandle(); padwatch.focusOnce(b.length >= 8 ? b.readBigUInt64LE(0).toString() : String(b.readUInt32LE(0))); } catch (e) { log('home menu focus', e.message); } }
 function giveBack() { if (!win || win.isDestroyed()) return; try { win.setFocusable(false); } catch {} if (session && overApp()) padwatch.front(true); } // (the pointer stays where it was)
-function showWin() { const w = ensureWindow(); clearTimeout(hideT); w.setAlwaysOnTop(true, 'screen-saver'); if (!w.isVisible()) w.showInactive(); w.moveTop(); }
-function hideWinSoon(ms) { clearTimeout(hideT); hideT = setTimeout(() => { if (win && !win.isDestroyed() && !(session && session.open) && !shelf) win.hide(); }, ms); }
+function stopTopGuard() { clearInterval(topGuard); topGuard = null; }
+function keepOnTop() {
+  const w = win;
+  if (!w || w.isDestroyed()) return;
+  try {
+    // A fullscreen emulator can briefly re-assert its z-order after the Guide press.
+    // Re-apply the highest Electron window level while the Home menu is visible.
+    w.setAlwaysOnTop(true, 'screen-saver');
+    if (!w.isVisible()) w.showInactive();
+    w.moveTop();
+  } catch (e) { log('home menu topmost', e.message); }
+}
+function startTopGuard() {
+  stopTopGuard();
+  // Run immediately, again after the emulator's fullscreen transition, then while this overlay is open.
+  keepOnTop();
+  setTimeout(() => { if ((session && session.open) || shelf) keepOnTop(); }, 120);
+  setTimeout(() => { if ((session && session.open) || shelf) keepOnTop(); }, 500);
+  topGuard = setInterval(() => {
+    if (!((session && session.open) || shelf)) return stopTopGuard();
+    keepOnTop();
+  }, 900);
+  if (topGuard.unref) topGuard.unref();
+}
+function showWin() { ensureWindow(); clearTimeout(hideT); startTopGuard(); }
+function hideWinSoon(ms) { clearTimeout(hideT); hideT = setTimeout(() => { if (win && !win.isDestroyed() && !(session && session.open) && !shelf) { stopTopGuard(); win.hide(); } }, ms); }
 
 // a game started: remember what's running and load the overlay now so it opens instantly later
 function begin(meta) {
@@ -102,7 +127,7 @@ function begin(meta) {
   try { ensureWindow(); } catch (e) { log('home menu window', e.message); }
 }
 function setMeta(extra) { if (session) Object.assign(session.meta, extra || {}); }
-function end() { session = null; shelf = null; padwatch && padwatch.setMenu(false); if (win && !win.isDestroyed()) { win.destroy(); win = null; } }
+function end() { session = null; shelf = null; stopTopGuard(); padwatch && padwatch.setMenu(false); if (win && !win.isDestroyed()) { win.destroy(); win = null; } }
 
 function actionsFor(k) { const a = ['resume']; if (k.save) a.push('save'); if (k.load) a.push('load'); if (k.shot) a.push('shot'); a.push('power', 'quit'); return a; }
 
@@ -147,7 +172,7 @@ function ready() {
   if (s.open) { showWin(); setTimeout(() => { if (session === s && s.open) showWin(); }, 400); if (s.pausePending) { s.pausePending = false; pauseNow(s); } }
 }
 // keep the menu above Boxshelf's own loading screen while that screen is re-asserting itself on top
-function raise() { if (isOpen() && win && !win.isDestroyed()) { try { win.moveTop(); } catch {} } }
+function raise() { if (isOpen()) keepOnTop(); }
 function button(name, down) {
   if (!(((session && session.open) || shelf) && win && !win.isDestroyed())) return;
   // the Guide tap that opened the menu (or the controller's own echo of it) must not close it straight away

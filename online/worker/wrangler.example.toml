@@ -1,0 +1,17 @@
+name = "boxshelf-online"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+# Los ids se rellenan una vez con:
+#   npx wrangler@latest d1 create boxshelf-online
+#   npx wrangler@latest kv namespace create IMG
+# (copia los "database_id" y "id" que imprimen aquí abajo)
+
+[[d1_databases]]
+binding = "DB"
+database_name = "boxshelf-online"
+database_id = "TU_DATABASE_ID_AQUI"
+
+[[kv_namespaces]]
+binding = "IMG"
+id = "TU_KV_NAMESPACE_ID_AQUI"

@@ -11,6 +11,23 @@ contextBridge.exposeInMainWorld('boxshelf', {
     ? { os: 'linux', caps: { steam: true, power: true, homeMenu: false, emuSettings: false, autostart: true, displays: true, folders: true, companionServer: true, winMode: false, dolphinIpl: false, raAutoConfig: false } }
     : { os: 'windows', caps: { steam: true, power: true, homeMenu: true, emuSettings: true, autostart: true, displays: true, folders: true, companionServer: true, winMode: true, dolphinIpl: true, raAutoConfig: true } },
   getConfig: () => call('config:get'),
+  reload: () => call('app:reload'), // main reloads the screen (a page-initiated location.reload() is blocked by will-navigate)
+  profiles: () => call('profiles:list'),
+  createProfile: name => call('profiles:create', { name: String(name || '') }),
+  selectProfile: id => call('profiles:select', { id: String(id || '') }),
+  updateProfile: (id, patch) => call('profiles:update', { id: String(id || ''), patch: patch || {} }),
+  stageProfileImage: file => call('profiles:stage', { file: String(file || '') }),
+
+  // Boxshelf Online (perfiles y amigos)
+  onlineStatus: () => call('online:status'),
+  onlineSetServer: url => call('online:setServer', { url: String(url || '') }),
+  onlineRegister: name => call('online:register', { name: String(name || '') }),
+  onlineSync: () => call('online:sync'),
+  onlineUpload: (kind, data) => call('online:upload', { kind: String(kind || ''), data: data || {} }),
+  onlineFriends: () => call('online:friends'),
+  onlineFriendAdd: code => call('online:friendAdd', { code: String(code || '') }),
+  onlineFriendRemove: code => call('online:friendRemove', { code: String(code || '') }),
+  onlineView: code => call('online:view', { code: String(code || '') }),
   openExternal: url => call('app:openExternal', { url }),
   updateCheck: force => call('app:updateCheck', { force: !!force }), // (1.82) { current, latest, newer, url, links } or { error }
   onUpdate: cb => ipcRenderer.on('app:update', (_e, r) => cb(r)),
@@ -167,7 +184,7 @@ contextBridge.exposeInMainWorld('boxshelf', {
   gameStatus: (id, status) => call('game:status', { id, status }), // (beta.12) Details → Your play → Status
   onWiimote: fn => ipcRenderer.on('wiimote', (e, d) => fn(d)), // the Wii remote: { x, y, seen, b, hold } / { on }
   wmRumble: ms => ipcRenderer.send('wm:rumble', ms),
-  padsPresent: () => call('pads:present'), // the real controllers plugged in: [{ vendor, product, style }]
+  padsPresent: (force) => call('pads:present', force === true), // the real controllers plugged in: [{ vendor, product, style }]
   onExited: fn => ipcRenderer.on('run:exited', (e, info) => fn(info)),
   onRunReady: fn => ipcRenderer.on('run:ready', () => fn()),
   onRunQuitting: fn => ipcRenderer.on('run:quitting', () => fn()),
@@ -219,5 +236,5 @@ contextBridge.exposeInMainWorld('boxshelf', {
   manualCancel: o => call('manual:cancel', o),
   onManualCand: fn => { const h = (e, d) => fn(d); ipcRenderer.on('manual:cand', h); return () => ipcRenderer.removeListener('manual:cand', h); },
   onManualJob: fn => { const h = (e, d) => fn(d); ipcRenderer.on('manual:job', h); return () => ipcRenderer.removeListener('manual:job', h); },
-  onArtJob: fn => { const h = (e, d) => fn(d); ipcRenderer.on('art:job', h); return () => ipcRenderer.removeListener('art:job', h); }
+  onArtJob: fn => { const h = (e, d) => fn(d); ipcRenderer.on('art:job', h); return () => ipcRenderer.removeListener('art:job', h); },
 });

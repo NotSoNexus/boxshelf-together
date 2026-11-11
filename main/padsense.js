@@ -17,7 +17,7 @@ function parse(out) {
     const [id, cls, name] = l.split('|');
     const m = /VID_([0-9A-F]{4})&PID_([0-9A-F]{4})/i.exec(id) || /VID&0002([0-9A-F]{4})_PID&([0-9A-F]{4})/i.exec(id); if (!m) continue;
     const k = m[1].toLowerCase() + ':' + m[2].toLowerCase(), o = seen.get(k) || { pad: false, xbox: false };
-    if (/game controller|gamepad|joystick|controller/i.test(name || '')) o.pad = true;
+    if (/game controller|gamepad|joystick|controller|joy-?con|dualsense|dualshock|playstation|switch/i.test(name || '')) o.pad = true;
     if (/^(XnaComposite|XboxComposite)$/i.test(cls || '')) o.xbox = true;
     seen.set(k, o);
   }
@@ -32,9 +32,9 @@ function parse(out) {
   }
   return out2;
 }
-function list() {
+function list(force) {
   if (process.platform !== 'win32') return Promise.resolve([]);
-  if (memo && Date.now() - memoAt < 4000) return Promise.resolve(memo);
+  if (!force && memo && Date.now() - memoAt < 4000) return Promise.resolve(memo);
   if (flight) return flight;
   flight = new Promise(res => {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', PS], { windowsHide: true, timeout: 15000 }, (err, out) => {

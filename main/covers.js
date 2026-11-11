@@ -421,7 +421,8 @@ function cancelRefresh() { refreshStop = true; if (lbForce && !lbForce.signal.ab
 // what the Refresh row shows: { state, at (built), bytes (the index file) }
 function indexInfo() { if (lbOverride) return { state: 'ready', at: lbOverride.at || 0, bytes: 0 }; if (!cacheDir) return { state: 'missing', at: 0, bytes: 0 };
   const f = path.join(cacheDir, 'launchbox-index.json'); let bytes = 0, at = 0; try { const st = fs.statSync(f); bytes = st.size; at = st.mtimeMs; } catch {} const m = shardMeta(); if (m && m.at) at = m.at;
-  return { state: indexState(), at, bytes, busy: !!lbFlight, refreshing: !!lbForce }; }
+  // (local) plats: how many platforms the index covers, for the LaunchBox page in Settings
+  return { state: indexState(), at, bytes, plats: m && Array.isArray(m.plats) ? m.plats.length : 0, busy: !!lbFlight, refreshing: !!lbForce }; }
 // the index if it's on disk already (never downloads or builds it: the Art Studio picker must answer at once). An older
 // one past its 60 days still serves (better than nothing); null while there is none, or while it's being split
 function readyIndex() { if (lbOverride) return lbOverride; if (!cacheDir) return null; const m = ensureShards(); return m && m.v >= 8 ? lazyIndex(m) : null; }

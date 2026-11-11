@@ -2,8 +2,17 @@
 (function(){
 "use strict";
 const api=window.boxshelf;
+let activeProfile=null;
 const {hash,hsl}=window.Covers;
 const $=id=>document.getElementById(id);
+async function profileMenu(){
+  if(window.BS_PROFILES&&BS_PROFILES.toggle)return window.BS_PROFILES.toggle();
+  const r=await api.profiles(); const lines=r.profiles.map((p,i)=>`${i+1}. ${p.name}${p.id===r.active?" (actual)":""}`);
+  const pick=prompt(`Perfiles locales\n\n${lines.join("\n")}\n\nEscribe un número para cambiar o +Nombre para crear uno.`);
+  if(!pick)return;const v=pick.trim();
+  if(v.startsWith("+")){const p=await api.createProfile(v.slice(1));await api.selectProfile(p.id);await api.reload().catch(()=>{});return}
+  const p=r.profiles[Number(v)-1];if(!p)return toast("Elige un número de perfil válido");if(p.id!==r.active){await api.selectProfile(p.id);await api.reload().catch(()=>{});}
+}
 const safe=fn=>{try{return fn()}catch(e){return null}};
 const app=$("app"),track=$("track");
 
@@ -2398,7 +2407,8 @@ const QS_I={
   museum:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-5 9 5M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg>',
   gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
   power:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v8M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>',
-  cube:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>'
+  cube:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>',
+  download:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v13m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'
 };
 // "PS2 · Built-in 3D · Wordmark": what this shelf has of its own (Customize's rows, in a few words)
 function qsCzShelf(){const s=cur();return s&&THEME_IDS.find(x=>x[0]===s.id)||null}
@@ -3603,7 +3613,7 @@ let padSeen=null;
 // an XInput pad, which Windows reports without a maker, so Steam Input or DS4Windows can be wrapping any pad in it
 // (padSee decides those from the controllers actually plugged in). Settings shows the name.
 const PAD_MODELS={"054c":{"05c4":"DualShock 4","09cc":"DualShock 4","0ba0":"DualShock 4 (wireless adapter)","0ce6":"DualSense","0df2":"DualSense Edge","0e5f":"Access controller","*":"PlayStation controller"},
-  "057e":{"2009":"Switch Pro Controller","2069":"Switch 2 Pro Controller","2006":"Joy-Con (L)","2007":"Joy-Con (R)","200e":"Joy-Con pair","2066":"Joy-Con 2 (R)","2067":"Joy-Con 2 (L)","2017":"SNES controller","2073":"GameCube controller","0337":"GameCube adapter","0306":"Wii remote","0330":"Wii remote","*":"Nintendo controller"},
+  "057e":{"2009":"Switch Pro Controller","2069":"Switch 2 Pro Controller","2006":"Joy-Con (L)","2007":"Joy-Con (R)","200e":"Joy-Con pair","2066":"Joy-Con 2 (R)","2067":"Joy-Con 2 (L)","2017":"SNES controller","2073":"GameCube controller","0337":"GameCube adapter","0306":"Wii remote","0330":"Wii remote","*":"Nintendo Switch controller"},
   "045e":{"*":"Xbox controller"},"28de":{"1102":"Steam Controller","1142":"Steam Controller","1205":"Steam Deck","*":"Steam controller"},"2dc8":{"*":"8BitDo controller"}};
 const PAD_STYLE={"054c":"ps","057e":"nintendo","045e":"xbox","28de":"xbox"}; // (beta.10: 8BitDo pads go by their name, Xbox by default: most are used in X-input mode; in Switch mode they report as Nintendo's own pad)
 function padInfo(id){id=String(id||"");const m=/vendor:?\s*([0-9a-f]{4})[^0-9a-f]+product:?\s*([0-9a-f]{4})/i.exec(id),v=m&&m[1].toLowerCase(),p=m&&m[2].toLowerCase();
@@ -3611,13 +3621,16 @@ function padInfo(id){id=String(id||"");const m=/vendor:?\s*([0-9a-f]{4})[^0-9a-f
   const style=/switch|nintendo|joy-?con|pro controller|pokken/i.test(id)?"nintendo":/dualsense|dualshock|playstation|ps[345]\b|^wireless controller/i.test(id)?"ps":"xbox";
   if(v&&PAD_MODELS[v])return {style:PAD_STYLE[v]||style,name:PAD_MODELS[v][p]||PAD_MODELS[v]["*"],vendor:v,product:p,virtual:false};
   const virtual=/xinput/i.test(id)&&!v;
-  return {style,name:virtual?"Xbox-style controller (XInput)":style==="ps"?"PlayStation controller":style==="nintendo"?"Nintendo controller":/xbox/i.test(id)?"Xbox controller":"Controller",vendor:v||"",product:p||"",virtual}}
+  return {style,name:virtual?(/xbox 360/i.test(id)?"Xbox 360 controller":/xbox/i.test(id)?"Xbox controller":/dualsense|dualshock|playstation/i.test(id)?"PlayStation controller":/switch|nintendo/i.test(id)?"Nintendo Switch controller":"Xbox-style controller (XInput)"):style==="ps"?"PlayStation controller":style==="nintendo"?"Nintendo Switch controller":/xbox/i.test(id)?"Xbox controller":"Controller",vendor:v||"",product:p||"",virtual}}
 window.BS_padInfo=padInfo;
 // XInput pads: the real controllers plugged in decide (main lists them: USB or Bluetooth, virtual ones and headsets left
 // out). Any real Xbox pad: Xbox. Otherwise one kind of real pad (a DualSense behind Steam Input / DS4Windows): its buttons.
-const padSee={list:[],ver:0};let padSeeVer=-1,padSeeT=0;
-function padSeeAsk(){if(!api.padsPresent)return;clearTimeout(padSeeT);padSeeT=setTimeout(()=>api.padsPresent().then(l=>{l=Array.isArray(l)?l:[];if(JSON.stringify(l)!==JSON.stringify(padSee.list)){padSee.list=l;padSee.ver++}}).catch(()=>{}),1200)}
-addEventListener("gamepadconnected",padSeeAsk);addEventListener("gamepaddisconnected",padSeeAsk);if(!ANDROID)padSeeAsk();
+const padSee={list:[],ver:0};let padSeeVer=-1,padSeeT=0,padSeeP=null,padSeeForce=false;
+function padSeeAsk(force){if(!api.padsPresent)return Promise.resolve();if(force)padSeeForce=true;if(padSeeP)return padSeeP; // one read serves every caller
+  padSeeP=new Promise(res=>{clearTimeout(padSeeT);padSeeT=setTimeout(()=>{const f=padSeeForce;padSeeForce=false;
+    api.padsPresent(f).then(l=>{l=Array.isArray(l)?l:[];if(JSON.stringify(l)!==JSON.stringify(padSee.list)){padSee.list=l;padSee.ver++}}).catch(()=>{}).then(()=>{padSeeP=null;res()})},250)});
+  return padSeeP}
+addEventListener("gamepadconnected",()=>padSeeAsk(true));addEventListener("gamepaddisconnected",()=>padSeeAsk(true));if(!ANDROID)padSeeAsk();
 function padSeeReal(){const L=padSee.list;if(!L.length||L.some(x=>x.style==="xbox"))return null;const kinds=[...new Set(L.map(x=>x.style))];return kinds.length===1?L.find(x=>x.style===kinds[0]):null}
 function padStyleOf(id){const i=padInfo(id);if(!i.virtual)return i.style;const r=padSeeReal();return r?r.style:"xbox"}
 function padSeeName(id){if(!padInfo(id).virtual)return "";const r=padSeeReal();if(!r)return "";const n=(PAD_MODELS[r.vendor]||{})[r.product]||(PAD_MODELS[r.vendor]||{})["*"]||"Controller";return n+" (through Steam / DS4Windows)"}
@@ -3628,7 +3641,10 @@ window.BS_padName=()=>padName?padName_(padName):"";window.BS_padStyleOf=padStyle
 function padStatus(gp){if(!document.hasFocus())return; // unfocused, Chromium hides pads: not a real disconnect
   const id=gp?gp.id:"";if(id===padSeen)return;const was=padSeen;padSeen=id;renderHints.sig="";renderHints();const el=$("padStat");if(el){el.classList.toggle("on",!!gp);el.title=gp?padName_(id):"No controller"}
   if(was===null)return; // first look at startup: no toast
-  if(gp){if(!ANDROID)padPrime=performance.now()+1500; /* (beta.12, Windows / Linux) a pad connecting: its first moment's presses are only noted (pollBody); the Thor's own pad is always there */toast(`${padName_(id)} connected`);rumble(.4,.4,120);try{api.log&&api.log(`controller: ${id} (${gp.mapping||"no mapping"}, ${gp.buttons.length} buttons) → ${padName_(id)}, ${padStyleOf(id)} prompts`)}catch{}}else{toast("Controller disconnected");if(inputMode==="pad"){setInput("kbd");renderHints.sig="";renderHints()}}} // no controller left: keyboard prompts, not A/B
+  if(gp){if(!ANDROID)padPrime=performance.now()+1500;const say=()=>{if(padSeen!==id)return;toast(`${padName_(id)} connected`);rumble(.4,.4,120);try{api.log&&api.log(`controller: ${id} (${gp.mapping||"no mapping"}, ${gp.buttons.length} buttons) → ${padName_(id)}, ${padStyleOf(id)} prompts`)}catch{}};
+    // Windows only says "XInput" for a pad wrapped by Steam / DS4Windows / BetterJoy: ask which real controller is
+    // plugged in first, so a DualSense or a Switch Pro is announced by its own name, not as an Xbox pad
+    if(padInfo(id).virtual&&!padSee.list.length)padSeeAsk(true).then(say);else say()}else{toast("Controller disconnected");if(inputMode==="pad"){setInput("kbd");renderHints.sig="";renderHints()}}} // no controller left: keyboard prompts, not A/B
 function sendShelfInfo(){try{if(!api.shelfInfo)return;const n=allShelves.filter(s=>s.kind!=="home").reduce((a,s)=>a+(s.games?s.games.length:0),0);api.shelfInfo({summary:`${n} games · ${allShelves.filter(s=>s.kind!=="home").length} shelves`,glyphs:glyphStyle(),swap:PADMAP.swap})}catch(e){}}
 
 /* ---------- keyboard ---------- */
@@ -3648,6 +3664,9 @@ api.onShelfMenu&&api.onShelfMenu(d=>{
 });
 addEventListener("keyup",e=>{if(mode==="homemenu"&&api.shelfMenuKey)api.shelfMenuKey(e.key,false)});
 addEventListener("keydown",e=>{
+  // Player profiles on top (the startup screen, Settings → Player profiles, the profile button's popover): no shelf
+  // shortcut (s, Esc, volume, the lot) belongs to the shelf while that screen is up — it reads its own keys.
+  {const pg=$("profileGate"),pp=$("profilePopover"),ol=$("onlinePanel");if((pg&&pg.classList.contains("on"))||(pp&&!pp.hidden)||(ol&&ol.classList.contains("on")))return}
   if(mode==="homemenu"){if(!e.repeat||/Arrow/.test(e.key))api.shelfMenuKey(e.key,true);e.preventDefault();return}
   if(mode==="setup"){Setup.key(e);return}
   if(mode==="sort"){setInput("kbd");if(sortKey(e.key))e.preventDefault();return}
@@ -3962,6 +3981,9 @@ function pollBody(t){
   /* the dimmed screen first, for every screen below: a press lifts it (and does nothing else) under the tour and the Android
      build's own screens too; they used to take the pad before it, so the screen stayed dark there */
   if(gp&&document.hasFocus()&&dimPad(viewOf(gp),t))return;
+  // player profiles on top (the startup gate, or the profile button's popover): that screen reads the pad itself.
+  // The shelf's edges are kept in step with what's held, so the press that chooses a profile doesn't also move the shelf.
+  {const pg=$("profileGate"),pp=$("profilePopover"),ol=$("onlinePanel");if((pg&&pg.classList.contains("on"))||(pp&&!pp.hidden)||(ol&&ol.classList.contains("on"))){if(gp){const vg=viewOf(gp);for(let i=0;i<vg.buttons.length;i++)prevBtn[i]=!!(vg.buttons[i]&&vg.buttons[i].pressed);prevBtn.v=prevBtn.h=true;held.dir=0}return}}
   // a screen of the Android build's own that reads the pad itself while it's up (the handheld Art Studio): the shelf's
   // edges are kept in step with what's held, so the press that closes it doesn't land on the shelf too
   if(gp&&window.BS_MODAL){const vg=viewOf(gp);if(BS_MODAL(vg,t)){for(let i=0;i<vg.buttons.length;i++)prevBtn[i]=!!(vg.buttons[i]&&vg.buttons[i].pressed);prevBtn.v=prevBtn.h=true;held.dir=0;return}}
@@ -4270,7 +4292,7 @@ $("dMore").addEventListener("click",()=>{const d=$("dDesc"),m=$("dMore");const c
 $("dPlay").addEventListener("click",play);$("dInspect").addEventListener("click",openInspect);$("dManual").addEventListener("click",()=>{openInspect();setTimeout(()=>{if(mode==="inspect"){ispAdvance();setTimeout(openReader,700)}},150)});$("dEmu").addEventListener("click",openEmulator);$("dClose").addEventListener("click",()=>closeDetails());
 $("launch").addEventListener("click",()=>{if($("lNote").classList.contains("on"))back()});
 $("themeBtn").addEventListener("click",toggleCustomize);$("setClose").addEventListener("click",closeCustomize);
-$("settingsBtn").addEventListener("click",()=>Setup.open());$("museumBtn").addEventListener("click",()=>openMuseum());$("emptySetup").addEventListener("click",()=>Setup.open({wizard:true}));
+$("settingsBtn").addEventListener("click",()=>Setup.open());$("museumBtn").addEventListener("click",()=>openMuseum());$("emptySetup").addEventListener("click",()=>Setup.open({wizard:true}));const profileBtn=$("profileBtn");if(profileBtn)profileBtn.addEventListener("click",()=>profileMenu().catch(e=>toast(e.message||"No se pudo cambiar el perfil")));
 let rz;addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>{if(!cur())return;measure();layout(true)},80)});
 
 // First start: the shelf stays hidden for a moment (at most ~0.9 s) until the covers around the selected game are
@@ -4334,7 +4356,7 @@ async function flushSaves(){
 }
 async function refresh(keepPlace,lib){
   let fresh=null;
-  try{await flushSaves();const was=cfgInfo;cfgInfo=await api.getConfig();if(was&&was.config&&cfgInfo&&cfgInfo.config&&(spSaveT||volSaveT||qmSaveT||musStyleSaveT))cfgInfo.config.ui=Object.assign({},cfgInfo.config.ui,was.config.ui);
+  try{await flushSaves();const was=cfgInfo;cfgInfo=await api.getConfig();activeProfile=cfgInfo&&cfgInfo.profile||null;const pb=$("profileBtn"),pa=pb&&pb.querySelector(".profile-button-avatar"),pn=pb&&pb.querySelector(".profile-button-name");if(pn)pn.textContent=activeProfile&&activeProfile.name||"Perfil";if(pa)pa.innerHTML=activeProfile&&activeProfile.avatar?`<img src="bsfile://local/${encodeURIComponent(activeProfile.avatar)}" alt="" style="transform:translate(${(activeProfile.fit&&activeProfile.fit.avatar&&activeProfile.fit.avatar.x)||0}%,${(activeProfile.fit&&activeProfile.fit.avatar&&activeProfile.fit.avatar.y)||0}%) scale(${(activeProfile.fit&&activeProfile.fit.avatar&&activeProfile.fit.avatar.z)||1})">`:String(activeProfile&&activeProfile.name||"?").slice(0,1).toUpperCase();if(was&&was.config&&cfgInfo&&cfgInfo.config&&(spSaveT||volSaveT||qmSaveT||musStyleSaveT))cfgInfo.config.ui=Object.assign({},cfgInfo.config.ui,was.config.ui);
   // (1.82) the settings file was locked when Boxshelf started (antivirus, a sync tool): running on defaults, nothing saved
   if(cfgInfo&&cfgInfo.settingsBlocked&&!refresh.blockedSaid){refresh.blockedSaid=1;pendingNote="Boxshelf couldn't read your settings (another program had the file open). Restart Boxshelf to load them; changes made now aren't saved."}
   // (1.76) the old Background → Game artwork choice is now the Artwork theme (Windows' config.js does the same on load)
@@ -4899,6 +4921,9 @@ const BOOT={t0:performance.now(),marks:[],gaps:[],last:"start"};
 function bootMark(n){if(!BOOT.done){const t=Math.round(performance.now()-BOOT.t0);BOOT.marks.push(n+"@"+t);BOOT.last=n}}
 (function bootWatch(){let prev=performance.now();const f=now=>{const gap=now-prev;prev=now;if(gap>40&&!document.hidden)BOOT.gaps.push(Math.round(now-BOOT.t0)+":"+Math.round(gap)+"("+BOOT.last+")");if(now-BOOT.t0<20000)requestAnimationFrame(f);else{BOOT.done=true;api.log&&api.log(`startup: ${BOOT.marks.join(" ")} | late frames (at:ms(after)): ${BOOT.gaps.slice(0,40).join(" ")||"none"}`)}};requestAnimationFrame(f)})();
 async function start(){bootMark("fonts");
+  // Profile selection comes before reading the cached library or starting a scan. A profile switch therefore never
+  // builds shelves, decodes covers or loads history that belongs to someone else.
+  if(window.BS_PROFILES&&BS_PROFILES.showStartup)await window.BS_PROFILES.showStartup();
   // last session's library first (instant shelves), then a real scan; rebuild only if it differs
   const cached=api.cachedLibrary?await api.cachedLibrary().catch(()=>null):null;
   if(cached&&cached.length){bootMark("cache");await refresh(false,cached);bootMark("built");const afterReveal=()=>new Promise(r=>{const w=()=>revealedAt&&performance.now()-revealedAt>1200?r():setTimeout(w,200);w()}); /* the background rescan waits until the shelf is in: it keeps the PC busy */

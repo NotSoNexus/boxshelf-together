@@ -256,6 +256,9 @@ function build(){
     ]),
   ]},
   {g:"Boxshelf",id:"shelf",name:"Shelf",ic:"shelf",lead:"How the shelf behaves: console order, shuffle and the idle show.",rows:[
+    A("Player profiles","Manage","Create or edit local player profiles, including their picture, banner and description.",()=>{close();setTimeout(()=>window.BS_PROFILES&&BS_PROFILES.openSettings({from:"settings"}),220)},{keys:"profiles accounts players avatar banner description"}),
+    A("Online","Friends","Boxshelf Online: create your account, add friends by friend code and see their profiles.",()=>{close();setTimeout(()=>window.BS_ONLINE&&BS_ONLINE.open({from:"settings"}),220)},{keys:"online friends account internet server profiles"}),
+    X("Online server","ui.onlineServer","The server for Boxshelf Online friends and profiles. Leave empty for default.",{ph:"Default server",keys:"online server address host url",live:v=>{if(window.boxshelf&&boxshelf.onlineSetServer)boxshelf.onlineSetServer(v).catch(()=>{})}}),
     A("Console order","Reorder","The order of the consoles along the top. Home always comes first.",()=>openSub({kind:"order"}),{keys:"shelf order arrange tabs move"}),
     /* (beta.11, Windows and Linux) the first-run tour again (tour.js): Settings closes, then it starts on the shelf */
     ...(window.bsPlatform&&bsPlatform.os==="android"?[]:[A("Show the tour","Start","A one-minute look at the basics: consoles, Details, Inspect, the quick menu, the Art Studio and where to add games.",()=>{Promise.resolve(close()).then(()=>setTimeout(()=>{if(window.BS_TOUR)BS_TOUR.start()},450))},{keys:"tour tutorial intro help guide basics how learn"})]),
@@ -468,6 +471,11 @@ function svcPage0(id){const n=SVC_N[id]||id,P=(lead,rows)=>({g:"Library",id:"acc
     X("Key","keys.steamgriddb","Your SteamGridDB API key. Stored encrypted.",{secret:true,ph:"Not set",fan:true,keys:"api key steamgriddb steam grid posters"}),
     test("Test the key","Checks the key."),
     A("Get a free key","Open site","Sign in at steamgriddb.com (a free Steam sign-in), then Preferences → API → copy the key and paste it above.",()=>openLink("https://www.steamgriddb.com/profile/preferences/api"),{keys:"steamgriddb"})]);
+  if(id==="launchbox")return P("The source of most of Boxshelf's real box art: fronts, backs, spines and cartridge photos, by region. There is nothing to sign in to and no key: Boxshelf downloads LaunchBox's public database once (about 110 MB) and keeps an index on this PC. Art Studio and the quick art picker use it straight away.",[
+    H("Database",{em:()=>lbShort()}),
+    A("Download or refresh",()=>lbRef?"Cancel":"Download","Downloads the LaunchBox database again and rebuilds the index, so newer scans and reconstructed fronts and backs show up. Your box art isn't touched: the old index keeps working until the new one is ready.",refreshIndex,{warnBtn:()=>!!lbRef,sub:()=>({text:refText(),cls:lbRef?"warn":""}),keys:"launchbox index database download refresh update"}),
+    A("Open LaunchBox Games Database","Open site","Opens gamesdb.launchbox-app.com in your browser, where the scans come from.",()=>openLink("https://gamesdb.launchbox-app.com/"),{keys:"launchbox games database site"}),
+  ]);
   return P("Box fronts, backs, full wraps (Boxshelf cuts the spine from them) and disc or cartridge art, by region, in Art Studio. Optional, and needs a free ScreenScraper account. ScreenScraper only answers apps registered with it: until Boxshelf's registration is done, the test says \"Not available yet\" and no account can sign in (unless you have your own developer login, below). Box art still comes from libretro, LaunchBox and SteamGridDB meanwhile.",[
     X("Username","keys.ssUser","Your screenscraper.fr username. Stored encrypted.",{ph:"Not set",fan:true,keys:"screenscraper account user login"}),
     X("Password","keys.ssPass","Your screenscraper.fr password. Stored encrypted, sent only to ScreenScraper.",{secret:true,ph:"Not set",fan:true,keys:"screenscraper password"}),
@@ -1535,6 +1543,8 @@ const mb=b=>b>0?(b/1048576).toFixed(b<10485760?1:0):"0";
 function refText(){if(lbRef){const p=lbRef;return p.phase==="download"?(p.total?`Downloading… ${mb(p.got)} of ${mb(p.total)} MB · ${p.pct||0}%`:`Downloading… ${mb(p.got)} MB`):p.phase==="unpack"?"Unpacking the database…":p.phase==="read"?`Reading the database… ${p.pct||0}%`:p.phase==="split"?"Finishing…":"Starting…"}
   if(!lbRefAsked&&api.artIndexInfo){lbRefAsked=true;Promise.resolve(api.artIndexInfo()).then(r=>{lbRefInfo=r||{};if(isOpen)bump()}).catch(()=>{lbRefInfo={}})}
   const i=lbRefInfo;return !i?"":i.at?`Last built ${when(i.at)}${i.bytes?` · index ${mb(i.bytes)} MB`:""}`:"Not built yet"}
+// (local) the short form for the Accounts & services row: "35 platforms · Last built … · index 117 MB"
+function lbShort(){const t=refText();if(lbRef)return t;const i=lbRefInfo||{};if(!i.at&&i.state!=="preparing")return "Not downloaded yet";return [i.plats?`${i.plats} platforms`:null,t].filter(Boolean).join(" · ")}
 async function refreshIndex(){if(!api.artRefreshIndex)return;if(lbRef){try{await api.artRefreshCancel()}catch(e){toast(errMsg(e))}return}
   lbRef={phase:"start"};toast("Refreshing the art database (about 110 MB)…");bump();
   try{lbRefInfo=await api.artRefreshIndex()||lbRefInfo;toast("Art database refreshed");Object.values(sCands).forEach(c=>c.dirty=true)}

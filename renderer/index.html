@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' bsfile: data: blob: https://archive.org https://*.archive.org https://media.retroachievements.org https://images.launchbox-app.com https://shared.cloudflare.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.akamai.steamstatic.com https://shared.fastly.steamstatic.com; media-src 'self' bsfile: blob:; connect-src 'self' bsfile: blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' bsfile: data: blob: https://*.workers.dev http://localhost:* http://127.0.0.1:* https://thumbnails.libretro.com https://*.libretro.com https://archive.org https://*.archive.org https://media.retroachievements.org https://images.launchbox-app.com https://shared.cloudflare.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.akamai.steamstatic.com https://shared.fastly.steamstatic.com; media-src 'self' bsfile: blob:; connect-src 'self' bsfile: blob:">
 <title>Boxshelf</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="style.css">
@@ -18,12 +18,14 @@
 <link rel="stylesheet" href="details2.css">
   <link rel="stylesheet" href="picker.css">
   <link rel="stylesheet" href="find.css">
+  <link rel="stylesheet" href="profiles.css">
 <script src="splash.js"></script>
 </head>
 <body>
 <div id="splash" aria-hidden="true"><div class="sp-word">BOXSHELF</div><div class="sp-line"></div></div>
 <script src="splash-start.js"></script>
 <div id="app">
+  <section class="profile-gate" id="profileGate" aria-hidden="true"></section>
   <div class="bg-layer on" id="bgA"><div class="tint"></div><img alt=""></div>
   <div class="bg-layer" id="bgB"><div class="tint"></div><img alt=""></div>
   <div class="theme-fx" id="themeFx" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -56,6 +58,8 @@
       </div>
       <div class="counter" id="counter"></div><div class="ra-pts" id="raPts" hidden></div>
       <div class="hud-buttons">
+        <button class="profile-button" id="profileBtn" type="button" title="Perfiles"><span class="profile-button-avatar"></span><span class="profile-button-name">Perfil</span></button>
+        <section class="profile-popover" id="profilePopover" hidden aria-label="Perfiles"></section>
         <button class="mini keep find-btn" id="findBtn" type="button" title="Find a game (/)" aria-label="Find a game"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
         <button class="mini keep menu-btn" id="menuBtn" type="button" aria-haspopup="menu"><span class="mb-glyph" id="menuGlyph"></span>Menu</button>
         <button class="mini keep" id="sortBtn" type="button" hidden>Sort</button>
@@ -285,6 +289,8 @@
 <script src="companion/tv-input.js"></script>
 <script src="whatsnew.js"></script>
 <script src="systems-extra.js"></script>
+<script src="profiles-ui.js"></script>
+<script src="online-ui.js"></script>
 <script src="app.js"></script>
 <script src="tour.js"></script>
 </body>
