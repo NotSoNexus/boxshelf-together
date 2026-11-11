@@ -17,7 +17,8 @@
   const B = () => (window.Shelf && Shelf._find) || null;
   const ANDROID = () => !!(window.bsPlatform && bsPlatform.os === 'android');
   const LINUX = () => !!((window.bsPlatform && bsPlatform.os === 'linux') || (window.boxshelf && boxshelf.platform && boxshelf.platform.os === 'linux'));
-  const S = { open: false, pad: false, zone: 'keys', kr: 0, kc: 0, sel: 0, q: '', list: null, res: [], total: 0, rows: new Map(), prev: null, rep: {}, eat: '', ptrAt: -1e9, gen: 0 };
+  const S = { open: false, pad: false, zone: 'keys', kr: 0, kc: 0, sel: 0, q: '', list: null, res: [], total: 0, rows: new Map(), prev: null, rep: {}, eat: '', ptrAt: -1e9, gen: 0,
+    folT: 0, here: null, from: null, moved: false, eatClick: -1e9 };
   const E = {};
   let el = null;
   const $ = (t, c, p) => { const e = document.createElement(t); if (c) e.className = c; if (p) p.append(e); return e; };
@@ -114,14 +115,14 @@
   function render() {
     const out = [];
     S.res.forEach((g, i) => { let r = S.rows.get(g.id); if (!r) { r = row(g); S.rows.set(g.id, r); } r.dataset.i = i; out.push(r); });
-    E.list.replaceChildren(...out); E.list.scrollTop = 0;
+    E.list.replaceChildren(...out); E.list.scrollTop = 0; E.list.scrollLeft = 0;
     const typed = !!norm(S.q), n = S.res.length;
     E.cap.textContent = !S.list ? '' : !typed ? (n ? 'Recently played' : '') : !n ? '' : S.total > n ? `The first ${n} of ${S.total} matches` : n === 1 ? '1 game' : n + ' games';
     E.empty.textContent = !S.list ? '' : n ? '' : typed ? `Nothing called “${S.q.trim()}” on your shelves.` : S.list.length ? 'Type a few letters of a title. Every shelf is searched.' : 'There are no games on your shelves yet.';
     E.empty.hidden = !!n || !S.list; E.clr.hidden = !S.q;
     paintSel();
   }
-  function update() { S.res = S.list ? search(S.q) : []; S.sel = 0; if (S.zone === 'list' && !S.res.length) S.zone = 'keys'; render(); paintKeys(); hints(); ctx(); }
+  function update() { S.res = S.list ? search(S.q) : []; S.sel = 0; if (S.zone === 'list' && !S.res.length) S.zone = 'keys'; render(); paintKeys(); hints(); ctx(); if (norm(S.q)) followSoon(); }
   // (beta.12, Android) the Thor's bottom screen shows its own keyboard and the first matches while this is up
   const ctx = () => { try { if (window.Shelf && Shelf._ctxSoon) Shelf._ctxSoon(); } catch {} };
   function setQ(q) { S.q = String(q).slice(0, 60); if (E.in.value !== S.q) E.in.value = S.q; update(); }
@@ -139,7 +140,7 @@
   const focusIn = () => { try { E.in.focus({ preventScroll: true }); } catch {} };
 
   // ---------- moving and typing ----------
-  function listMove(d) { const n = S.res.length; if (!n) return; const i = Math.max(0, Math.min(n - 1, S.sel + d)); if (i === S.sel) return; S.sel = i; paintSel(true); snd('tick', { dir: d > 0 ? 1 : -1 }); }
+  function listMove(d) { const n = S.res.length; if (!n) return; const i = Math.max(0, Math.min(n - 1, S.sel + d)); if (i === S.sel) return; S.sel = i; paintSel(true); snd('tick', { dir: d > 0 ? 1 : -1 }); followSoon(); }
   function setZone(z) { if (z === 'list' && !S.res.length) return; if (S.zone === z) return; S.zone = z; paintKeys(); paintSel(true); hints(); snd('tick', { dir: z === 'list' ? 1 : -1 }); }
   function move(dx, dy) {
     if (S.zone === 'list') { if (dy) listMove(dy); else if (dx < 0) setZone('keys'); return; }
@@ -166,11 +167,31 @@
   function hints() {
     const b = B(); if (!b || !el) return; let rows = [];
     const cap = t => `<span class="fg-kc">${t}</span>`, G = k => { try { return b.glyph(k); } catch { return cap(k); } };
-    if (S.pad) rows = [[G('x'), S.zone === 'list' ? 'Go to game' : 'Type'], [G('sq'), 'Delete'], [G('tri'), 'Space'], [G('L1') + G('R1'), 'Letters · Results'], [G('o'), 'Close']];
+    // (the slim bar: the bottom screen types, a controller picks; nothing to say to a finger)
+    if (S.bottomKb) { if (S.padSeen || b.pad()) rows = [[G('↔'), 'Choose'], [G('x'), 'Go to game'], [G('o'), 'Close']]; }
+    else if (S.pad) rows = [[G('x'), S.zone === 'list' ? 'Go to game' : 'Type'], [G('sq'), 'Delete'], [G('tri'), 'Space'], [G('L1') + G('R1'), 'Letters · Results'], [G('o'), 'Close']];
     else if (!ANDROID()) rows = [[cap('↑') + cap('↓'), 'Choose'], [cap('Enter'), 'Go to game'], [cap('Esc'), 'Close']];
     const h = rows.map(([k, l]) => `<span class="fg-hint"><span class="fg-hk">${k}</span>${l}</span>`).join('');
     if (E.hints._h !== h) { E.hints._h = h; E.hints.innerHTML = h; }
   }
+
+  // ---------- (Android, the bottom screen as the keyboard) the shelf under the slim bar shows the highlighted match ----------
+  // A moment after the highlight settles, and never while the shelf is still sliding, the shelf steps to that game when it's
+  // on the shelf already in view: one ordinary slide. A match on another console's shelf leaves the shelf where it is
+  // (going there rebuilds the shelf, its music and its art: that waits for A). Closed without choosing, the shelf goes back.
+  function followSoon() { if (!S.open || !S.bottomKb) return; clearTimeout(S.folT); S.folT = setTimeout(follow, 300); }
+  function follow() {
+    S.folT = 0; if (!S.open || !S.bottomKb) return;
+    if (window.BS_SLIDING && BS_SLIDING()) { S.folT = setTimeout(follow, 120); return; }
+    const g = S.res[S.sel]; if (!g) return;
+    // (the shelf in view, read once per open: its games, and its name as the matches give it; Home has none, so it never follows there)
+    if (!S.here) { let f = null, c = null, now = null; try { f = Shelf.artFocus(true); c = (Shelf.bottomShelves() || []).find(s => s.cur); now = Shelf._lib.cur(); } catch {}
+      S.here = { ids: new Set(((f && f.ids) || []).map(String)), name: c && f && c.id === String(f.sys) ? c.name : null }; S.from = now ? now.id : null; }
+    if (!S.here.name || g.sys !== S.here.name || !S.here.ids.has(String(g.id))) return;
+    try { Shelf.setMode('browse'); if (quietGo(g.id)) S.moved = true; } finally { try { if (S.open) Shelf.setMode('find'); } catch {} }
+  }
+  // the shelf's own tick muted: Find's tick has already said the highlight moved
+  function quietGo(id) { const so = window.Sound, P = so && so.play; let ok = false; try { if (P) so.play = () => {}; ok = !!B().go(id); } catch (e) { console.warn('find', e); } finally { if (P) so.play = P; } return ok; }
 
   // ---------- opening, choosing, closing ----------
   function open(how) {
@@ -187,26 +208,32 @@
     S.bottomKb = bottomKb;
     const pad = !bottomKb && (how === 'pad' || deckTouch || (how !== 'kbd' && !ptr && !!b.pad()));
     Shelf.setMode('find');
-    Object.assign(S, { open: true, pad, zone: 'keys', kr: 0, kc: 0, sel: 0, q: '', list: null, res: [], total: 0, prev: null, rep: {}, gen: S.gen + 1 });
+    clearTimeout(S.folT);
+    Object.assign(S, { open: true, pad, zone: 'keys', kr: 0, kc: 0, sel: 0, q: '', list: null, res: [], total: 0, prev: null, rep: {}, gen: S.gen + 1, folT: 0, here: null, from: null, moved: false, padSeen: false });
     S.rows.clear(); E.in.value = ''; E.count.textContent = '';
     el.classList.toggle('pad', pad); el.classList.toggle('bottomkb', bottomKb); el.classList.add('on'); el.setAttribute('aria-hidden', 'false');
+    if (bottomKb) document.body.classList.add('find-slim'); // (the shelf's own hint bar steps aside under the slim bar: its keys go to Find meanwhile)
     E.in.placeholder = bottomKb ? 'Type on the bottom screen' : 'Type a title';
     render(); paintKeys(); hints();
     if (!pad && !bottomKb) focusIn();
     snd('panel'); load(S.gen);
     return true;
   }
-  function close(quiet) {
+  // (stay: a match was chosen, so the shelf isn't taken back to where it was before the highlight moved it)
+  function close(quiet, stay) {
     if (!S.open) return; S.open = false; S.gen++;
-    el.classList.remove('on'); el.setAttribute('aria-hidden', 'true');
+    clearTimeout(S.folT); S.folT = 0;
+    el.classList.remove('on'); el.setAttribute('aria-hidden', 'true'); document.body.classList.remove('find-slim');
     if (document.activeElement === E.in) E.in.blur();
     try { if (Shelf.getMode() === 'find') Shelf.setMode('browse'); Shelf._wake(); } catch {}
+    if (S.moved && !stay && S.from != null) quietGo(S.from);
+    S.moved = false;
     if (!quiet) snd('back');
     ctx();
   }
   function choose(i) {
     const g = S.res[i]; if (!g) return;
-    close(true);
+    close(true, true);
     let ok = false; try { ok = B().go(g.id); } catch (e) { console.warn('find', e); }
     if (ok) snd('open'); else { try { let busy = false; try { busy = !B().can(); } catch {} Shelf.toast(busy ? 'One moment: the shelf is still changing. Try again' : `${g.title} isn’t on the shelf right now`); } catch {} }
   }
@@ -223,7 +250,11 @@
     const rep = k => { if (!now[k]) { S.rep[k] = 0; return false; } if (!was[k]) { S.rep[k] = t + 380; return true; } if (S.rep[k] && t > S.rep[k]) { S.rep[k] = t + 95; return true; } return false; };
     if (edge('b')) { close(); return; }
     // (the bottom screen is the keyboard: up / down through the matches, A goes there, X deletes a letter)
-    if (S.bottomKb) { if (rep('u')) listMove(-1); else if (rep('d')) listMove(1); if (edge('a')) choose(S.sel); if (rep('x')) type('back'); return; }
+    // (the matches are one row there: left / right step through them too)
+    if (S.bottomKb) {
+      if (!S.padSeen) { for (const k in now) if (edge(k)) { S.padSeen = true; hints(); break; } }
+      const back = rep('u') | rep('l'), fwd = rep('d') | rep('r');
+      if (back) listMove(-1); else if (fwd) listMove(1); if (edge('a')) choose(S.sel); if (rep('x')) type('back'); return; }
     // the first press after the keyboard or a finger: the letter grid comes back (on the results when something is typed)
     // (that press only brings the grid: it doesn't also type a letter; on the results it acts as usual)
     if (!S.pad) { let any = false; for (const k in now) if (edge(k)) any = true; if (!any) return; setPad(true, S.q && S.res.length ? 'list' : 'keys'); if (S.zone === 'keys') return; }
@@ -253,7 +284,7 @@
     if (k === 'Enter') { e.preventDefault(); if (e.repeat || e.isComposing) return; S.eat = k; if (S.pad) act(); else choose(S.sel); return; }
     if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); const d = k === 'ArrowDown' ? 1 : -1; if (S.pad) move(0, d); else listMove(d); return; }
     if (k === 'PageDown' || k === 'PageUp') { e.preventDefault(); if (!S.pad || S.zone === 'list') listMove(k === 'PageDown' ? 5 : -5); return; }
-    if (k === 'ArrowLeft' || k === 'ArrowRight') { if (S.pad) { e.preventDefault(); move(k === 'ArrowRight' ? 1 : -1, 0); } return; } // (in the field they're the caret's)
+    if (k === 'ArrowLeft' || k === 'ArrowRight') { if (S.pad) { e.preventDefault(); move(k === 'ArrowRight' ? 1 : -1, 0); } else if (S.bottomKb && document.activeElement !== E.in) { e.preventDefault(); listMove(k === 'ArrowRight' ? 1 : -1); } return; } // (in the field they're the caret's; the slim bar's one row of matches steps with them)
     if (k === 'Tab') { e.preventDefault(); if (S.pad) setZone(S.zone === 'keys' ? 'list' : 'keys'); return; }
     if ((e.ctrlKey || e.metaKey) && (k === 'f' || k === 'F')) { e.preventDefault(); if (S.pad) setPad(false); else focusIn(); E.in.select(); return; }
     // anything else is typing: it goes into the field (the letter grid gives way to a real keyboard)
@@ -262,6 +293,14 @@
   addEventListener('keyup', e => { if (S.open && !(window.BS_TOUR && BS_TOUR.on())) e.stopImmediatePropagation(); }, true);
   // (when the last finger or click was: a row of the quick menu or a hint pressed that way opens on the field, not the grid)
   addEventListener('pointerdown', e => { S.ptrAt = performance.now(); S.ptrType = e.pointerType || ''; }, { capture: true, passive: true });
+  // (the slim bar over the shelf, Android: a touch on the shelf under it closes Find, and that touch does nothing else, as
+  // with the quick menu)
+  addEventListener('pointerdown', e => {
+    if (!S.open || !S.bottomKb || !el || (window.BS_TOUR && BS_TOUR.on())) return;
+    const t = e.target; if (!t || el.contains(t) || (t.closest && t.closest('#toast'))) return;
+    e.stopImmediatePropagation(); S.eatClick = performance.now(); close();
+  }, true);
+  addEventListener('click', e => { if (performance.now() - S.eatClick < 700) { S.eatClick = -1e9; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 
   // the Search button beside Menu; the page elements made in a quiet moment so the first open has nothing to build
   function ready() {

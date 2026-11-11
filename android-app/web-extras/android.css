@@ -336,3 +336,6 @@ body.bs-still .sel-halo,body.bs-still .theme-fx i{animation-play-state:paused}
 .platform-android .inspect.reading{--rd-foot:110px}
 .platform-android .inspect.reading .rd-book{margin-top:2vh;height:calc(100vh - 3vh - var(--rd-foot,110px))}
 .platform-android .inspect.reading .isp-title{display:none}
+/* (beta.13) an app open on the bottom screen: the button that brings Boxshelf's bottom screen back (top middle) */
+#bsAwayChip{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9000;min-height:48px;padding:0 22px;border:0;border-radius:24px;background:rgba(14,15,24,.92);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),0 6px 18px rgba(0,0,0,.45);color:#eef0f6;font:600 17px/48px var(--ui,system-ui,sans-serif);letter-spacing:.01em;cursor:pointer;touch-action:manipulation}
+#bsAwayChip:active{background:rgba(40,42,60,.95)}

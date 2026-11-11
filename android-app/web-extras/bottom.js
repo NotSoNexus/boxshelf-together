@@ -83,6 +83,7 @@
     try { if (typeof m === 'string') m = JSON.parse(m); } catch { return; }
     if (!m || typeof m !== 'object') return;
     if (asleep && m.type !== 'scOpts') { keepAsleep(m); return; }
+    if (m.type === 'game' && tab === 'apps' && !apps) { appsAt = 0; askApps(); } // (the top screen is listening now)
     if (m.type === 'game') { const back = leaveMuseum(); if (Array.isArray(m.shelves)) { shelvesNow = m.shelves; if (tab === 'sys') paintSys(); } show(m.game || null, back); }
     else if (m.type === 'ctx') showCtx(m.ctx || null);
     else if (m.type === 'apps') recvApps(m);
@@ -318,7 +319,11 @@
     ['bluetooth', 'Bluetooth', '<path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9"/>']];
   $('apSys').innerHTML = AP_SYS.map(([k, l, p]) => `<button class="ap-s" type="button" data-sa="${k}"><svg viewBox="0 0 24 24">${p}</svg><span>${l}</span></button>`).join('');
   $('apSys').addEventListener('click', e => { const b = e.target.closest('[data-sa]'); if (b) cmd('sysAct', b.dataset.sa); });
-  function askApps() { if (!apps) paintApps(); if (!apps || Date.now() - appsAt > 60000) { appsAt = Date.now(); cmd('apps');
+  // (asked again until the list comes: the Apps tab can be the first thing this page shows, before the top screen is
+  // listening, and that first ask was lost until the tab was left and opened again)
+  function askApps() { if (!apps) paintApps(); clearTimeout(askApps.t);
+    if (!apps) askApps.t = setTimeout(() => { if (!apps && tab === 'apps' && (askApps.n = (askApps.n || 0) + 1) <= 4) { appsAt = 0; askApps(); } }, 2500);
+    if (!apps || Date.now() - appsAt > 60000) { appsAt = Date.now(); cmd('apps');
     if (!window.BoxshelfBottom && window.parent === window) setTimeout(() => recvApps({ items: ['RetroArch', 'Dolphin', 'AetherSX2', 'PPSSPP', 'Spotify', 'YouTube', 'Chrome', 'Discord', 'Steam Link', 'Moonlight', 'Camera', 'Gallery', 'Files', 'Clock']
       .map(l => ({ pkg: 'demo.' + l.toLowerCase().replace(/\W/g, ''), label: l })) }), 150); } } // (opened on its own: a few made-up apps)
   function recvApps(m) {
@@ -340,17 +345,42 @@
     box.innerHTML = apps.map(a => { const u = icons.get(a.pkg), h = [...a.pkg].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 360, 7);
       return `<button class="ap" type="button" data-pkg="${esc(a.pkg)}">${u ? `<img class="ap-ic" src="${esc(u)}" alt="">` : `<i class="ap-ic" style="--h:${h}">${esc((a.label.trim()[0] || '?').toUpperCase())}</i>`}<span>${esc(a.label)}</span></button>`; }).join('');
   }
-  // a tap opens it; holding it (half a second, without moving) adds it to Shortcuts
-  { const grid = $('apGrid'); let hold = null;
-    grid.addEventListener('pointerdown', e => { const b = e.target.closest('.ap'); if (!b) return; clearTimeout(hold && hold.t);
-      hold = { b, x: e.clientX, y: e.clientY, done: false, t: setTimeout(() => { if (!hold || hold.b !== b) return; hold.done = true; const a = (apps || []).find(x => x.pkg === b.dataset.pkg); if (!a) return;
-        const k = 'app:' + a.pkg, had = scList().includes(k); if (!had) scToggle(k, { label: a.label, sub: 'App' }); b.classList.add('held'); setTimeout(() => b.classList.remove('held'), 700);
-        say(had ? `${a.label} is already in Shortcuts` : `${a.label} added to Shortcuts`); }, 500) }; });
-    grid.addEventListener('pointermove', e => { if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10 * (fit.z || 1)) { clearTimeout(hold.t); hold = null; } }, { passive: true });
+  // a tap opens it (on the top screen); holding it (half a second, without moving) opens its menu, as the Thor's own
+  // launcher does: open it on the top or the bottom screen, add it to Shortcuts (or take it out), App info
+  // (beta.13: the hold used to add it to Shortcuts straight away). The same hold works on an app in Shortcuts.
+  function holdable(box, sel, onHold, onTap) { let hold = null;
+    box.addEventListener('pointerdown', e => { const b = e.target.closest(sel); if (!b) return; clearTimeout(hold && hold.t);
+      hold = { b, x: e.clientX, y: e.clientY, done: false, t: setTimeout(() => { if (!hold || hold.b !== b) return; hold.done = true; b.classList.add('held'); setTimeout(() => b.classList.remove('held'), 500); onHold(b); }, 500) }; });
+    box.addEventListener('pointermove', e => { if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10 * (fit.z || 1)) { clearTimeout(hold.t); hold = null; } }, { passive: true });
     const up = () => { if (hold) clearTimeout(hold.t); };
-    grid.addEventListener('pointerup', up); grid.addEventListener('pointercancel', () => { up(); hold = null; });
-    grid.addEventListener('click', e => { const b = e.target.closest('.ap'); if (!b) return; const h = hold; hold = null; if (h && h.done) return; cmd('scRun', 'app:' + b.dataset.pkg); });
-    grid.addEventListener('contextmenu', e => e.preventDefault()); }
+    box.addEventListener('pointerup', up); box.addEventListener('pointercancel', () => { up(); hold = null; });
+    box.addEventListener('click', e => { const b = e.target.closest(sel); if (!b) return; const h = hold; hold = null; if (h && h.done && h.b === b) { e.stopPropagation(); e.preventDefault(); return; } if (onTap) onTap(b, e); }, true);
+    box.addEventListener('contextmenu', e => { if (e.target.closest(sel)) e.preventDefault(); }); }
+  holdable($('apGrid'), '.ap', b => { const a = (apps || []).find(x => x.pkg === b.dataset.pkg); if (a) appMenu(a.pkg, a.label); },
+    b => cmd('appRun', { pkg: b.dataset.pkg, screen: 'top' }));
+  holdable($('more'), '.tile.mine[data-sc^="app:"]', b => { const k = b.dataset.sc, x = scx()[k] || {}; appMenu(k.slice(4), x.label || k.slice(4)); });
+
+  // the app menu: a sheet over this screen; a tap outside it, or Cancel, closes it
+  let apm = null;
+  function appMenu(pkg, label) {
+    if (!apm) { apm = document.createElement('div'); apm.id = 'apMenu'; apm.className = 'apm'; apm.hidden = true; (document.getElementById('stage') || document.body).appendChild(apm);
+      apm.addEventListener('click', e => { const t = e.target.closest('[data-am]'); if (!t) { if (e.target === apm) closeAppMenu(); return; } const a = t.dataset.am, p = apm.dataset.pkg, l = apm.dataset.label;
+        closeAppMenu();
+        if (a === 'top' || a === 'bottom') cmd('appRun', { pkg: p, screen: a });
+        else if (a === 'info') cmd('appInfo', { pkg: p });
+        else if (a === 'sc') { const k = 'app:' + p, had = scList().includes(k); scToggle(k, had ? null : { label: l, sub: 'App' }); say(had ? `${l} taken out of Shortcuts` : `${l} added to Shortcuts`); if (tab === 'more') paintMore(); }
+      }); }
+    const u = icons.get(pkg), inSc = scList().includes('app:' + pkg), h = [...pkg].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 360, 7);
+    apm.dataset.pkg = pkg; apm.dataset.label = label;
+    apm.innerHTML = `<div class="apm-card" role="menu"><div class="apm-head">${u ? `<img class="ap-ic" src="${esc(u)}" alt="">` : `<i class="ap-ic" style="--h:${h}">${esc((String(label).trim()[0] || '?').toUpperCase())}</i>`}<b>${esc(label)}</b></div>
+      <button type="button" data-am="top"><span>Open on top screen</span></button>
+      <button type="button" data-am="bottom"><span>Open on bottom screen</span><small>The shelf stays on top</small></button>
+      <button type="button" data-am="sc"><span>${inSc ? 'Remove from Shortcuts' : 'Add to Shortcuts'}</span></button>
+      <button type="button" data-am="info"><span>App info</span><small>Storage, permissions, force stop</small></button>
+      <button type="button" class="apm-x" data-am="x"><span>Cancel</span></button></div>`;
+    apm.hidden = false;
+  }
+  function closeAppMenu() { if (apm) apm.hidden = true; }
 
   // ---------- a swipe up on the Game card: Details on the big screen (beta.12) ----------
   { const side = $('side'); let sw = null;

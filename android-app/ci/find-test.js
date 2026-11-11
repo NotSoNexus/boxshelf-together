@@ -9,6 +9,8 @@
 // moving; the quick menu's first row opens it too.
 // The Thor (853x480 @2.25) and a phone held upright (390x844): the Search button opens it on the field by touch, text is
 // 20 px and up, rows and buttons are 48 dp and up, nothing spills sideways; the letter grid only with a controller.
+// The Thor with its bottom screen on: a slim bar along the top (the matches in one row, nothing over the middle), the shelf
+// under it steps to the highlighted match on the shelf in view and goes back when Find closes without a choice.
 // Checks results, never speed. Screenshots (when the runner gives an OUT folder): find-*.png.
 'use strict';
 const path = require('path');
@@ -32,7 +34,7 @@ module.exports = async function findPass({ browser, base, check, OUT }) {
     const list = e.querySelector('.fg-list'), field = e.querySelector('.fg-field').getBoundingClientRect(), res = e.querySelector('.fg-res').getBoundingClientRect(), keys = e.querySelector('.fg-keys').getBoundingClientRect();
     return { vw, vh, sw: document.scrollingElement.scrollWidth, out, font, what, row: h('.fg-row'), key: h('.fg-key'), x: h('.fg-x'), fieldH: Math.round(field.height * k * 10) / 10, listFits: list.scrollWidth <= list.clientWidth + 1,
       under: res.top >= field.bottom - 1, beside: res.left >= field.right - 1, keysUnderField: keys.height ? keys.top >= field.bottom - 1 : null, rows: e.querySelectorAll('.fg-row').length,
-      titleCut: [...e.querySelectorAll('.fg-row .fg-t')].filter(t => t.getBoundingClientRect().width < 60).length }; }, k);
+      titleCut: [...e.querySelectorAll('.fg-row .fg-t')].filter(t => t.getBoundingClientRect().width < 60).length, panelH: Math.round(e.getBoundingClientRect().height / vh * 100) / 100 }; }, k);
 
   // ---------- Windows 1280x720: keyboard and mouse ----------
   { const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } }); const page = await ctx.newPage(); watch(page);
@@ -141,6 +143,54 @@ module.exports = async function findPass({ browser, base, check, OUT }) {
       await page.evaluate(() => BS_FIND.open('pad')); await page.waitForTimeout(400); await loaded(page);
       await page.tap('#bsFind .fg-key[data-k="K"]'); await page.tap('#bsFind .fg-key[data-k="I"]'); await page.waitForTimeout(300); r.pad = await st(page); r.fitP = await fit(page, k); await shot(page, `find-pad-${name}.png`);
       await page.tap('#bsFind .fg-x'); await page.waitForTimeout(400); r.closed = await st(page);
+      // (beta.12) the Thor with its bottom screen on (its status stood in for): the bottom screen is the keyboard, and up here
+      // a slim bar along the top with the shelf in view under it; the highlighted match, when it's on the shelf in view, is
+      // shown there; closed without choosing, the shelf goes back; a touch on the shelf under the bar only closes it
+      if (name === 'thor') {
+        const at = () => page.evaluate(() => ({ cur: String((Shelf._lib.cur() || {}).id), mode: Shelf.getMode(), open: BS_FIND.isOpen(), sys: (Shelf.artFocus() || {}).sys, res0: BS_FIND._st().res[0] || '' }));
+        const typeOn = t => page.evaluate(async t => { const w = ms => new Promise(res => setTimeout(res, ms)); BS_FIND.remote('clear'); for (const ch of t) { if (/[\p{L}\p{N}]/u.test(ch)) BS_FIND.remote('k', ch); else BS_FIND.remote('space'); await w(20); } }, t);
+        const settle = () => page.waitForFunction(() => !Shelf._tour.busy(), null, { timeout: 8000, polling: 150 }).catch(() => {});
+        await settle();
+        r.kbSet = await page.evaluate(() => { const api = window.boxshelf; if (!api) return 'no api'; window.__bsWas = api.bottomScreen;
+          api.bottomScreen = Object.assign({}, api.bottomScreen || {}, { available: () => true, status: () => ({ available: true, enabled: true, shown: true }) }); return 'ok'; });
+        // a game on the shelf in view, the farthest from the case showing, and one on another console's shelf (titles no other game has)
+        r.kbPick = await page.evaluate(() => { const f = Shelf.artFocus(true), c = Shelf.bottomShelves().find(s => s.cur) || {}, cur = Shelf._lib.cur() || {}, L = Shelf._find.games(), ids = (f.ids || []).map(String);
+          const one = g => !L.some(h => h !== g && h.title.toLowerCase() === g.title.toLowerCase()), far = g => Math.abs(ids.indexOf(String(g.id)) - f.sel);
+          const here = L.filter(g => g.sys === c.name && ids.includes(String(g.id)) && String(g.id) !== String(cur.id) && one(g)).sort((a, b) => far(b) - far(a))[0], away = L.find(g => g.sys !== c.name && one(g));
+          return { sys: f.sys, name: c.name, from: String(cur.id), here: here ? { id: String(here.id), title: here.title } : null, away: away ? { id: String(away.id), title: away.title } : null }; });
+        const P = r.kbPick;
+        await page.evaluate(() => BS_FIND.open('ptr')); await page.waitForTimeout(400); await loaded(page);
+        await typeOn(P.here.title); await page.waitForTimeout(250);
+        r.kbLook = await page.evaluate(k => { const e = document.getElementById('bsFind'), vw = innerWidth, vh = innerHeight, b = e.getBoundingClientRect(), rows = [...e.querySelectorAll('.fg-row')], list = e.querySelector('.fg-list');
+          const tops = new Set(rows.map(x => Math.round(x.getBoundingClientRect().top))), mid = document.elementFromPoint(vw / 2, vh / 2), x = e.querySelector('.fg-x').getBoundingClientRect(), row = rows[0] && rows[0].getBoundingClientRect();
+          let font = 99; for (const n of e.querySelectorAll('*')) { if (!n.getClientRects().length || n.closest('svg')) continue; if (![...n.childNodes].some(c => c.nodeType === 3 && c.textContent.trim()) && n.tagName !== 'INPUT') continue; font = Math.min(font, parseFloat(getComputedStyle(n).fontSize)); }
+          return { kb: e.classList.contains('bottomkb'), h: Math.round(b.height / vh * 100) / 100, top: Math.round(b.top), rows: rows.length, lines: tops.size, oneRow: list.scrollHeight <= list.clientHeight + 1, midIn: !!(mid && e.contains(mid)),
+            mid: mid ? (mid.id || String(mid.className) || mid.tagName).slice(0, 40) : '', grid: getComputedStyle(e.querySelector('.fg-keys')).display, ph: e.querySelector('.fg-in').placeholder, focused: document.activeElement === e.querySelector('.fg-in'),
+            cur: (e.querySelector('.fg-row.cur .fg-t') || {}).textContent || '', font, xDp: Math.round(Math.min(x.width, x.height) * k), rowDp: row ? Math.round(row.height * k) : 0, sw: document.scrollingElement.scrollWidth, vw }; }, k);
+        await shot(page, 'find-bottomkb-thor.png');
+        await page.waitForTimeout(1600); r.kbFollow = await at(); await shot(page, 'find-bottomkb-follow-thor.png');
+        // a match on another console's shelf: the shelf stays where it is
+        await typeOn(P.away.title); await page.waitForTimeout(1400); r.kbAway = await at();
+        // a controller: right steps along the row of matches, and its hints show in the bar (the shelf's own hint bar is hidden meanwhile); the arrow keys too
+        await typeOn('a'); await page.waitForTimeout(300);
+        r.kbPad = await page.evaluate(() => { const gp = b => ({ buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === b, value: i === b ? 1 : 0 })), axes: [0, 0, 0, 0] }), t = performance.now();
+          const s0 = BS_FIND._st().sel; BS_FIND.pad(gp(-1), t); BS_FIND.pad(gp(15), t + 16); BS_FIND.pad(gp(-1), t + 32); const s1 = BS_FIND._st().sel;
+          const f = document.getElementById('bsFind'), h = f.querySelector('.fg-hints'), hr = h.getBoundingClientRect(), fr = f.getBoundingClientRect(), list = f.querySelector('.fg-list');
+          return { s0, s1, n: BS_FIND._st().res.length, hints: h.textContent.replace(/\s+/g, ' ').trim(), hintsIn: hr.height > 0 && hr.bottom <= fr.bottom, h: Math.round(fr.height / innerHeight * 100) / 100, oneRow: list.scrollHeight <= list.clientHeight + 1,
+            shelfHints: getComputedStyle(document.getElementById('hints')).visibility }; });
+        await page.keyboard.press('ArrowRight'); await page.waitForTimeout(100); r.kbPad.s2 = (await at()).open && (await page.evaluate(() => BS_FIND._st().sel));
+        await shot(page, 'find-bottomkb-pad-thor.png');
+        await page.evaluate(() => BS_FIND.close()); await page.waitForTimeout(1200); r.kbBack = await at(); r.kbHintsBack = await page.evaluate(() => getComputedStyle(document.getElementById('hints')).visibility);
+        await settle();
+        // a touch on the shelf under the bar: Find closes, the shelf doesn't move or open anything
+        await page.evaluate(() => BS_FIND.open('ptr')); await page.waitForTimeout(400); await loaded(page);
+        await page.touchscreen.tap(Math.round(vp.width / 2), Math.round(vp.height / 2)); await page.waitForTimeout(1000); r.kbTap = await at();
+        await settle();
+        // A on a match (the bottom screen's pick): that game, and the shelf stays on it
+        await page.evaluate(() => BS_FIND.open('ptr')); await page.waitForTimeout(400); await loaded(page);
+        await typeOn(P.here.title); await page.waitForTimeout(1600); await page.evaluate(() => BS_FIND.remote('pick', 0)); await page.waitForTimeout(1200); r.kbPicked = await at();
+        await page.evaluate(() => { window.boxshelf.bottomScreen = window.__bsWas; });
+      }
     } catch (e) { r.err = e.message; }
     await ctx.close(); return r; };
   o.thor = await android({ width: 853, height: 480 }, 2.25, 'thor');
@@ -206,5 +256,21 @@ module.exports = async function findPass({ browser, base, check, OUT }) {
     check(`Find a game (${name}): with a controller the letter grid shows (${narrow ? 'between the field and the results' : 'beside the results'}), on screen, and its letters type`,
       p.open && p.pad && p.gridOn && p.q === 'Ki' && JSON.stringify(p.res) === JSON.stringify(['Kitebound · Switch', 'Coral Kingdom · GameCube', 'Tanuki Trail · Switch']) && (narrow ? g.under && g.keysUnderField : g.beside) && !g.out.length && g.sw <= g.vw + 1 && g.font >= 20 && g.key >= (narrow ? 40 : 44) && !(r.closed || {}).open && (r.closed || {}).mode === 'browse', J(p, g, r.closed));
   }
+  const th = o.thor || {}, ph = o.phone || {}, kl = th.kbLook || {}, kp = th.kbPick || {}, kh = kp.here || {}, kf = th.kbFollow || {}, ka = th.kbAway || {}, kb = th.kbBack || {}, kt = th.kbTap || {}, kk = th.kbPicked || {};
+  check('Find a game without the bottom screen: still the full screen as before (Windows, the Thor and a phone by touch, the letter grid with a controller)',
+    (o.fitK || {}).panelH >= .98 && (o.fitP || {}).panelH >= .98 && (th.fit || {}).panelH >= .98 && (th.fitP || {}).panelH >= .98 && (ph.fit || {}).panelH >= .98 && (th.pad || {}).gridOn,
+    J((o.fitK || {}).panelH, (o.fitP || {}).panelH, (th.fit || {}).panelH, (th.fitP || {}).panelH, (ph.fit || {}).panelH));
+  check('Find a game (the Thor, bottom screen on): a slim bar along the top (35% of the screen at most), the matches in one row, nothing of it over the middle of the screen, no letter grid, the highlight on the match typed below',
+    th.kbSet === 'ok' && kl.kb && kl.h <= .35 && kl.top === 0 && kl.rows >= 1 && kl.lines === 1 && kl.oneRow && !kl.midIn && kl.grid === 'none' && kl.ph === 'Type on the bottom screen' && !kl.focused && kl.cur === kh.title && kl.font >= 20 && kl.xDp >= 48 && kl.rowDp >= 48 && kl.sw <= kl.vw + 1,
+    J(th.kbSet, kl, kp, th.err));
+  check('Find a game (the Thor, bottom screen on): the shelf under the bar steps to the highlighted match on the shelf in view; one on another shelf leaves it there; closed without choosing, it goes back',
+    !!kh.id && kf.open && kf.mode === 'find' && kf.cur === kh.id && kf.sys === kp.sys && ka.open && ka.cur === kh.id && ka.sys === kp.sys && ka.res0.startsWith((kp.away || {}).title + ' · ') && !kb.open && kb.mode === 'browse' && kb.cur === kp.from && kb.sys === kp.sys,
+    J(kp, kf, ka, kb));
+  const kq = th.kbPad || {};
+  check('Find a game (the Thor, bottom screen on): a controller\'s right (and the arrow keys) step along the row of matches; its hints show in the bar, the shelf\'s own hint bar is hidden until Find closes',
+    kq.n >= 3 && kq.s0 === 0 && kq.s1 === 1 && kq.s2 === 2 && /Choose/.test(kq.hints || '') && /Go to game/.test(kq.hints || '') && /Close/.test(kq.hints || '') && kq.hintsIn && kq.h <= .35 && kq.oneRow && kq.shelfHints === 'hidden' && th.kbHintsBack === 'visible',
+    J(kq, th.kbHintsBack));
+  check('Find a game (the Thor, bottom screen on): a touch on the shelf under the bar only closes it; a match picked below goes to that game and the shelf stays there',
+    !kt.open && kt.mode === 'browse' && kt.cur === kp.from && kt.sys === kp.sys && !kk.open && kk.mode === 'browse' && kk.cur === kh.id && kk.sys === kp.sys, J(kt, kk));
   check('Find a game pass: no script errors', !errors.length, errors.slice(0, 3).join(' | '));
 };

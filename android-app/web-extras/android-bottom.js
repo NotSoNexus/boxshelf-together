@@ -117,6 +117,7 @@
     else if (m.type === 'cmd' && m.cmd === 'apps') appList();
     else if (m.type === 'cmd' && m.cmd === 'appIcons') appIcons(Array.isArray(m.arg) ? m.arg : []);
     else if (m.type === 'cmd' && m.cmd === 'sysAct') sysAct(String(m.arg || ''));
+    else if (m.type === 'cmd' && (m.cmd === 'appRun' || m.cmd === 'appInfo')) appAct(m.cmd, m.arg);
     else if (m.type === 'cmd') { run(String(m.cmd || ''), argOf(m.arg)); if (/^(rd|find|det)$/.test(m.cmd)) ctxSoon(true); }
   });
   // (0.3.5) the Shortcuts tab's own buttons: an app on the device, a console's shelf, a favourite game. scOpts: the choices
@@ -156,6 +157,30 @@
       });
     }
   }
+  // (beta.13) an app held on the Apps tab (or a Shortcut): open it on the top or the bottom screen, or its App info page
+  function appAct(c, arg) {
+    const pkg = String((arg && typeof arg === 'object' ? arg.pkg : arg) || '').slice(0, 200), screen = arg && arg.screen === 'bottom' ? 'bottom' : 'top';
+    if (!/^[\w.]+$/.test(pkg)) return;
+    const say = t => { try { window.Shelf && Shelf.toast && Shelf.toast(t); } catch {} };
+    if (c === 'appInfo') return Promise.resolve(api.appInfo ? api.appInfo(pkg) : null).catch(e => say(e && e.message || "Couldn't open App info"));
+    if (screen === 'top') { try { if (window.Shelf && Shelf.bottomShortcut && Shelf.bottomShortcut('app:' + pkg)) return; } catch {} }
+    if (!api.launchApp) return;
+    say(screen === 'bottom' ? 'Opening it on the bottom screen…' : 'Opening the app…');
+    return api.launchApp(pkg, { screen }).catch(e => say(e && e.message || "Couldn't open that app"));
+  }
+  // (beta.13) while an app is open on the bottom screen: a small button at the top of the shelf brings Boxshelf's back
+  let awayEl = null;
+  function awayChip(pkg) {
+    if (!pkg) { if (awayEl) { awayEl.remove(); awayEl = null; } return; }
+    if (!awayEl) {
+      awayEl = document.createElement('button'); awayEl.id = 'bsAwayChip'; awayEl.type = 'button';
+      awayEl.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); Promise.resolve(api.bottomBack && api.bottomBack()).catch(() => {}); });
+      document.body.appendChild(awayEl);
+    }
+    awayEl.textContent = 'Bring back Boxshelf’s bottom screen';
+  }
+  addEventListener('bs-bottom-away', e => awayChip(e && e.detail && e.detail.pkg));
+
   // the Apps tab's row of Android's own places: the home screen you had before, Settings and a few of its pages
   function sysAct(a) {
     const go = p => Promise.resolve(p).catch(e => { log('sysAct', a, e && e.message); try { window.Shelf && Shelf.toast && Shelf.toast(e && e.message || "Couldn't open that"); } catch {} });

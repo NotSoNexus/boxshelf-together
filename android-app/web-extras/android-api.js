@@ -179,6 +179,9 @@
 
   // ---------- launching ----------
   let onExit = () => {}, running = null, justBack = 0;
+  // (beta.13) apps that draw on both screens (DS / 3DS / Wii U emulators): opened on top, they get the bottom screen too
+  const DUAL_APP = /(melonds|drastic|citra|azahar|lime3ds|borked3ds|mandarine|panda3ds|\.cemu|cemu\.|nds4droid)/i;
+  let bottomAway = ''; // (beta.13) the app opened on the bottom screen, until Boxshelf's is brought back
 
   // ---------- the Home screen: Boxshelf as the Thor's launcher, and the way back to the old one ----------
   // Same logic as the other front ends that can be the Home app (Cocoon, Daijisho, ES-DE): Home always comes back here;
@@ -2182,7 +2185,20 @@ window.BS_QUIET = () => ({ running: !!running, artPaused: !!art.paused, hidden: 
     // (0.3.5) the apps on the device with a launcher icon (the bottom screen's Shortcuts: Spotify, a browser, any app)
     androidApps: async () => { await ready; const inst = await apps(true);
       return [...inst].filter(([p]) => p !== 'io.github.boxshelf').map(([pkg, label]) => ({ pkg, label: String(label || pkg) })).sort((a, b) => a.label.localeCompare(b.label)); },
-    launchApp: async appId => { running = { at: Date.now() }; try { await N.launch({ pkg: appId, grant: [] }); } catch (err) { running = null; throw new Error((err && err.message) || String(err)); } return {}; },
+    // (beta.13) o.screen: 'bottom' opens the app on the Thor's second screen (the shelf on top stays as it is), 'top' on the
+    // main one. An app on top leaves Boxshelf's bottom screen up, unless it's one that draws on both (DS / 3DS / Wii U emulators)
+    launchApp: async (appId, o) => { const screen = o && /^(top|bottom)$/.test(o.screen) ? o.screen : '';
+      const req = { pkg: appId, grant: [], keepBottom: !DUAL_APP.test(String(appId || '')) }; if (screen) req.screen = screen;
+      if (screen !== 'bottom') running = { at: Date.now() };
+      try { await N.launch(req); } catch (err) { running = null; throw new Error((err && err.message) || String(err)); }
+      if (screen === 'bottom') { bottomAway = String(appId); try { window.dispatchEvent(new CustomEvent('bs-bottom-away', { detail: { pkg: bottomAway } })); } catch {} }
+      return {}; },
+    // (beta.13) Boxshelf's bottom screen back after an app was opened there
+    bottomBack: async () => { bottomAway = ''; try { if (N.bottomBack) await N.bottomBack(); } finally { try { window.dispatchEvent(new CustomEvent('bs-bottom-away', { detail: { pkg: '' } })); } catch {} } },
+    bottomAway: () => bottomAway,
+    appInfo: async pkg => { if (!N.appInfo) throw new Error("App info isn't available"); await N.appInfo({ pkg: String(pkg || '') }); },
+    // (beta.13) Settings' Paste key: Android's clipboard text
+    clipRead: async () => { if (!N.clipRead) return ''; const r = await N.clipRead(); return String((r && r.text) || ''); },
     onExited: fn => { onExit = fn; },
     onRunReady: fn => { window.__bsRunReady = fn; },
     history: async () => { await ready; return st.history; },
@@ -2446,7 +2462,10 @@ window.BS_QUIET = () => ({ running: !!running, artPaused: !!art.paused, hidden: 
         const s = fakeSave(o.tree, o.sub, o.name);
         return Object.assign({ ok: true, display: pic(o.dname || o.name) + '?' + encodeURIComponent(o.dname || ''), saved: s.saved, name: o.name + '.png', file: s.file }, s.had ? { old: '/files/art-old/' + o.name + '.png' } : {}); },
       pickImage: async () => { __fakeArt.picked++; return window.__fakePickCancel ? { canceled: true } : { uri: 'content://fake/picked/photo.jpg' }; },
-      launch: async req => { window.__fakeLaunches.push(req); setTimeout(() => (listeners.resume || []).forEach(f => f({})), 1500); },
+      launch: async req => { window.__fakeLaunches.push(req); if (req && req.screen === 'bottom') return; setTimeout(() => (listeners.resume || []).forEach(f => f({})), 1500); },
+      bottomBack: async () => { window.__fakeCalls = (window.__fakeCalls || []).concat(['bottomBack']); },
+      appInfo: async o => { window.__fakeCalls = (window.__fakeCalls || []).concat(['appInfo:' + (o && o.pkg)]); },
+      clipRead: async () => ({ text: String(window.__fakeClip || '') }),
       // a pretend bottom screen: what the shelf sends it is kept in __fakeBottom; with &bottomPreview=1 the real
       // bottom.html runs in a small frame in the corner and its buttons work, as on the Thor
       bottomStatus: async () => ({ available: true, enabled: bottomOn, shown: bottomOn, width: 1240, height: 1080, density: 2, name: 'Pretend bottom screen' }),

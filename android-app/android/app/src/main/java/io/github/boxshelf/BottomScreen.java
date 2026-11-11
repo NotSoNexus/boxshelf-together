@@ -100,6 +100,15 @@ final class BottomScreen implements DisplayManager.DisplayListener {
 
     void onPause() { main.post(() -> { resumed = false; hideNow(); }); }
 
+    // (beta.13) An app opened on the bottom screen (held on the Apps tab: "Open on bottom screen"): the page steps aside
+    // so the app is seen, and stays aside (Boxshelf coming to the front again doesn't cover the app) until the player
+    // asks for it back from the top screen, or turns the bottom screen off and on.
+    private volatile boolean away;
+    boolean isAway() { return away; }
+    int displayId() { try { Display d = findDisplay(); return d == null ? -1 : d.getDisplayId(); } catch (RuntimeException e) { return -1; } }
+    void stepAway() { main.post(() -> { away = true; hideNow(); }); }
+    void comeBack() { main.post(() -> { away = false; rebuilds = 0; showIfWanted(); }); }
+
     void release() {
         // Right now when we're already on the main thread (the activity's onDestroy): posted, it would run after the
         // activity is gone and Android would log the presentation's window as leaked.
@@ -128,7 +137,7 @@ final class BottomScreen implements DisplayManager.DisplayListener {
     void setEnabled(boolean on, boolean remember) {
         if (remember) prefs.edit().putBoolean(PREF_ON, on).apply();
         main.post(() -> {
-            if (on) { rebuilds = 0; showIfWanted(); }
+            if (on) { rebuilds = 0; away = false; showIfWanted(); }
             else { dropScreen(); listener.onChange(); } // off means off: the WebView is freed too
         });
     }
@@ -152,6 +161,7 @@ final class BottomScreen implements DisplayManager.DisplayListener {
         r.put("available", d != null);
         r.put("enabled", enabled());
         r.put("shown", visible);
+        r.put("away", away);             // (beta.13) an app is open on the bottom screen
         r.put("device", deviceName());   // (0.4.0) e.g. "AYN Thor": shown in Settings so a player can tell what it saw
         r.put("builtIn", thorDevice());  // the second screen is the handheld's own (on by default), not a TV or a cast
         if (d != null) {
@@ -219,7 +229,7 @@ final class BottomScreen implements DisplayManager.DisplayListener {
     }
 
     private void showIfWanted() {
-        if (released || !resumed || !enabled() || activity.isFinishing()) return;
+        if (released || !resumed || away || !enabled() || activity.isFinishing()) return;
         Display d;
         try { d = findDisplay(); } catch (RuntimeException e) { d = null; }
         if (d == null) { if (screen != null) dropScreen(); listener.onChange(); return; }

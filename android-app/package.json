@@ -1,6 +1,6 @@
 {
   "name": "boxshelf-android",
-  "version": "1.82.0-beta.12",
+  "version": "1.82.0-beta.13",
   "private": true,
   "description": "Android (AYN Thor) shell for Boxshelf: packages ../renderer with Capacitor",
   "scripts": {

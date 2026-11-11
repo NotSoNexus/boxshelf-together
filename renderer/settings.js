@@ -955,7 +955,11 @@ const L0=[["1","2","3","4","5","6","7","8","9","0"],["q","w","e","r","t","y","u"
 const L1=[["1","2","3","4","5","6","7","8","9","0"],["Q","W","E","R","T","Y","U","I","O","P"],["A","S","D","F","G","H","J","K","L","\""],["Z","X","C","V","B","N","M","_",":","⌫"]];
 const L2=[["!","@","#","$","%","^","&","*","(",")"],["\\","/",":",";","_","=","+","{","}","~"],["[","]","<",">","|","?",",","`","'","\""],["€","£","¥","§","°","·","…","-",".","⌫"]];
 let oskMode="search",oskSig="";
-function keysNow(){if(oskMode==="search")return [...L0,["Space","Clear","Done"]];return [...[L0,L1,L2][oskLayer],["Shift","#+=","Space","Clear","Cancel","Done"]]}
+/* (beta.13) Paste: where the platform can read the clipboard (Android: an API key copied from a browser) */
+const canPaste=()=>!!(api&&typeof api.clipRead==="function");
+function keysNow(){const P=canPaste()?["Paste"]:[];if(oskMode==="search")return [...L0,["Space",...P,"Clear","Done"]];return [...[L0,L1,L2][oskLayer],["Shift","#+=","Space",...P,"Clear","Cancel","Done"]]}
+async function pasteClip(){let t="";try{t=String(await api.clipRead()||"")}catch{}t=t.replace(/[\r\n\t]+/g," ").trim();if(!t){toast("Nothing to paste: copy the text first");return}
+  if(edit){edit.value+=t;paintEdit()}else{query+=t;runSearch()}play("tick",1);toast("Pasted");render()}
 function openOsk(mode){oskMode=mode||"search";oskLayer=0;E.osk.classList.add("on");focus="osk";const n=keysNow().flat().length;if(oskI>=n)oskI=0;oskSig=""}
 function closeOsk(){E.osk.classList.remove("on");if(focus==="osk")focus=edit?"page":"search"}
 function renderOsk(){if(!E.osk.classList.contains("on"))return;const K=keysNow(),sig=oskMode+oskLayer+(device==="pad")+swapAB()+padStyle();
@@ -964,7 +968,7 @@ function renderOsk(){if(!E.osk.classList.contains("on"))return;const K=keysNow()
     E.osk.querySelectorAll(".bss-key").forEach(k=>k.onclick=e=>{e.stopPropagation();oskI=+k.dataset.j;focus="osk";pressKey(keysNow().flat()[oskI]);render()})}
   E.osk.querySelectorAll(".bss-key").forEach(k=>k.classList.toggle("cur",focus==="osk"&&+k.dataset.j===oskI))}
 function pressKey(k){if(k==="⌫")backspace();else if(k==="Space")typeChar(" ");else if(k==="Clear"){if(edit){edit.value="";paintEdit()}else{query="";runSearch()}}
-  else if(k==="Done")oskDone();else if(k==="Cancel")cancelEdit();else if(k==="Shift"){oskLayer=oskLayer===1?0:1}else if(k==="#+="){oskLayer=oskLayer===2?0:2}
+  else if(k==="Paste")pasteClip();else if(k==="Done")oskDone();else if(k==="Cancel")cancelEdit();else if(k==="Shift"){oskLayer=oskLayer===1?0:1}else if(k==="#+="){oskLayer=oskLayer===2?0:2}
   else{typeChar(k);if(oskLayer===1)oskLayer=0}}
 function oskDone(){if(edit){commitEdit();return}closeOsk();focus=results&&results.length?"page":"search";rowI=0}
 function oskMove(a){const K=keysNow(),pos=[];K.forEach((row,ri)=>row.forEach((k,c)=>pos.push([ri,c])));if(!pos[oskI])oskI=0;const [ri,c]=pos[oskI];
@@ -973,8 +977,11 @@ function oskMove(a){const K=keysNow(),pos=[];K.forEach((row,ri)=>row.forEach((k,
     const frac=(c+.5)/K[ri].length,nc=Math.min(K[nr].length-1,Math.floor(frac*K[nr].length));oskI=pos.findIndex(p=>p[0]===nr&&p[1]===nc)}}
 
 /* ---------- editing a text setting ---------- */
+/* (beta.13) On Android a finger opens Boxshelf's own keyboard too: Android's, over a fullscreen app, didn't come up on the
+   Thor, and the box it typed into had only Enter / Esc to save or cancel. A real keyboard's keys still switch to typing */
+const oskTouch=()=>!!(window.bsPlatform&&bsPlatform.os==="android");
 function startEdit(r,first,val){edit={row:r,value:(val!=null?String(val):first!=null?String(r.get()||"")+first:String(r.get()||"")),idx:rowI}; /* val: text already typed (on-screen keyboard to a real one): the input is built with it */
-  if(device==="pad"){openOsk("edit");render()}else{focus="edit";render();const inp=E.list.querySelector(".bss-edit");if(inp){inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length)}catch{}}}}
+  if(device==="pad"||oskTouch()){openOsk("edit");render()}else{focus="edit";render();const inp=E.list.querySelector(".bss-edit");if(inp){inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length)}catch{}}}}
 function paintEdit(){const el=E.list.querySelector(".bss-editv");if(el){el.firstChild.textContent=edit.row.secret?"•".repeat(edit.value.length):edit.value}}
 function commitEdit(){if(!edit)return;const r=edit.row,v=edit.value.trim().replace(/^"(.*)"$/,"$1");edit=null;closeOsk();focus="page";
   if(!eq(v,r.get()||"")){r.set(v);changed(r);if(r.ra||r.fan)setTimeout(loadStatus,2500)}else{render()}}

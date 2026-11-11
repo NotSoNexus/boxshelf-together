@@ -127,3 +127,29 @@ body.reduce-motion .fg-box{transform:none}
 .fg.bottomkb .fg-keys{display:none!important}
 .platform-android .fg .fg-key{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
 .platform-android .fg .fg-key.cur{background:var(--hl);box-shadow:var(--hlRing)}
+/* (beta.12, Android) and with the bottom screen on it's a slim bar along the top, so the shelf stays in view under it (and
+   steps to the highlighted match when it's on that shelf): the field, a controller's hints, the count and Close in one line,
+   the matches in one row of small covers under it, on a dark band that fades into the shelf. Nothing covers the middle of
+   the screen; no blur (the shelf moves under it). The shelf's own hint bar is hidden meanwhile (its keys go to Find) */
+.fg.bottomkb{bottom:auto;background:radial-gradient(60vw 220px at 82% -60px,color-mix(in srgb,var(--tint) 20%,transparent),transparent 70%),
+  linear-gradient(180deg,#0d0f1a,#0a0b14 calc(100% - 30px),rgba(10,11,20,0))}
+.platform-android .fg.bottomkb .fg-box{position:relative;inset:auto;width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;grid-template-rows:auto minmax(72px,auto);
+  grid-template-areas:"field hints cap x" "res res res res";align-items:center;column-gap:20px;row-gap:10px;padding:12px 28px 30px}
+.fg.bottomkb .fg-head,.fg.bottomkb .fg-main,.fg.bottomkb .fg-side,.fg.bottomkb .fg-res{display:contents}
+.fg.bottomkb .fg-title,.fg.bottomkb .fg-count{display:none}
+.fg.bottomkb .fg-hints{grid-area:hints;flex-wrap:nowrap;justify-content:flex-end;gap:18px;min-height:0}
+body.find-slim #hints{visibility:hidden}
+.fg.bottomkb .fg-field{grid-area:field;height:60px}
+.fg.bottomkb .fg-cap{grid-area:cap;min-height:0;padding:0;max-width:360px}
+.platform-android .fg.bottomkb .fg-x{grid-area:x;margin:-6px -16px -6px 0}
+.fg.bottomkb .fg-list,.fg.bottomkb .fg-empty{grid-area:res;min-width:0}
+.fg.bottomkb .fg-list{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:2px;margin:-2px}
+.fg.bottomkb .fg-list::-webkit-scrollbar{display:none}
+.fg.bottomkb .fg-list:empty{display:none}
+.fg.bottomkb .fg-empty{padding:0 4px}
+.fg.bottomkb .fg-row{flex:none;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto;align-content:center;column-gap:12px;row-gap:2px;
+  width:300px;min-height:0;height:72px;padding:6px 14px 6px 6px;border-radius:12px}
+.fg.bottomkb .fg-row::after{display:none}
+.fg.bottomkb .fg-th{grid-row:1/span 2;width:60px;height:60px;border-radius:6px}
+.fg.bottomkb .fg-t{align-self:end;font-size:21px;line-height:1.25}
+.fg.bottomkb .fg-s{align-self:start;max-width:none;line-height:1.25;overflow:hidden;text-overflow:ellipsis}

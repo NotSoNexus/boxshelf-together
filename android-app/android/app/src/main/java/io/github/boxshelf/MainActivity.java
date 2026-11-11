@@ -111,9 +111,12 @@ public class MainActivity extends BridgeActivity {
     // app: the bottom screen's too, which is hidden by then). Capacitor itself never does this (its KeepRunning is on)
     private void pauseWeb() {
         if (!paused || webPaused) return;
+        if (BoxshelfNativePlugin.topStaysUp) return; // (beta.13) an app opened on the bottom screen: the shelf stays live
         WebView wv = getBridge() != null ? getBridge().getWebView() : null;
         if (wv == null) return;
-        try { wv.onPause(); wv.pauseTimers(); webPaused = true; } catch (RuntimeException ignored) {}
+        // (beta.13) Boxshelf's bottom page still on show (a game on top that doesn't use it): only this page stops drawing,
+        // because pauseTimers() would freeze the bottom page's timers too
+        try { wv.onPause(); if (!BoxshelfNativePlugin.bottomStaysUp) wv.pauseTimers(); webPaused = true; } catch (RuntimeException ignored) {}
     }
 
     // (beta.12) the timers are restarted every time Boxshelf comes to the front, paused here or not: pauseTimers() stops the

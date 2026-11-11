@@ -1564,6 +1564,8 @@ server.listen(0, async () => {
     await require('./bottom-companion-test')({ browser, base, check, newPage, OUT });
     // (beta.12) Thor touch: a double tap picks the case up, a swipe up opens Details, down closes it (ci/touch-gestures-test.js)
     await require('./touch-gestures-test')({ browser, base, check, newPage, OUT });
+    // (beta.13) Settings by touch on Android: a text setting opens Boxshelf's keyboard, its keys and Paste type (ci/settings-touch-test.js)
+    await require('./settings-touch-test')({ browser, base, check, newPage, OUT });
     } // ===== end of group thor =====
     if (runs('screens')) { // ===== group screens: passes 10-17 =====
     // ---------- pass 10: magazines & guides (0.3.2): the store, downloads, the reading corner (ci/reading-test.js) ----------

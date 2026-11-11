@@ -370,12 +370,55 @@ public class BoxshelfNativePlugin extends Plugin {
         // because Android doesn't compare extras. Opening an app or an emulator on its own keeps its task as it was
         boolean game = (data != null && !data.isEmpty()) || extras.length() > 0;
         if (game) i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        // (beta.13) which screen: "bottom" opens it on the Thor's second display (Boxshelf's page steps aside there and the
+        // shelf on top keeps running); "top" asks for the main display. Android 8+ only (setLaunchDisplayId)
+        String screenWanted = call.getString("screen", "");
+        boolean toBottom = "bottom".equals(screenWanted);
+        android.os.Bundle opts = null;
+        if (toBottom || "top".equals(screenWanted)) {
+            int id = toBottom ? (bottom != null ? bottom.displayId() : -1) : android.view.Display.DEFAULT_DISPLAY;
+            if (toBottom && (id < 0 || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O)) { call.reject("There's no bottom screen to open it on"); return; }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) opts = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(id).toBundle();
+        }
         try {
-            launchedAt = android.os.SystemClock.uptimeMillis(); // (beta.12: the pause that follows is the game taking over, see stepAside)
-            getActivity().startActivity(i);
+            sideApp = toBottom; sideAt = toBottom ? android.os.SystemClock.uptimeMillis() : 0;
+            launchedAt = toBottom ? 0 : android.os.SystemClock.uptimeMillis(); // (beta.12: the pause that follows is the game taking over, see stepAside)
+            if (toBottom && bottom != null) bottom.stepAway();
+            if (opts != null) getActivity().startActivity(i, opts); else getActivity().startActivity(i);
             call.resolve();
-        } catch (ActivityNotFoundException e) { launchedAt = 0; call.reject("The emulator didn't accept the game (" + (activity != null ? activity : pkg) + ")");
-        } catch (SecurityException e) { launchedAt = 0; call.reject("Android blocked opening the emulator: " + e.getMessage()); }
+        } catch (ActivityNotFoundException e) { launchedAt = 0; backFromAway(); call.reject("The emulator didn't accept the game (" + (activity != null ? activity : pkg) + ")");
+        } catch (SecurityException e) { launchedAt = 0; backFromAway(); call.reject("Android blocked opening the emulator: " + e.getMessage()); }
+    }
+
+    private void backFromAway() { if (sideApp) { sideApp = false; if (bottom != null) bottom.comeBack(); } }
+
+    // (beta.13) the top screen's "Bring Boxshelf back" while an app is open on the bottom screen
+    @PluginMethod
+    public void bottomBack(PluginCall call) { sideApp = false; if (bottom != null) bottom.comeBack(); call.resolve(); }
+
+    // (beta.13) the bottom screen's Apps tab, held: Android's own "App info" page for that app
+    @PluginMethod
+    public void appInfo(PluginCall call) {
+        String pkg = call.getString("pkg", "");
+        if (pkg == null || pkg.isEmpty()) { call.reject("No app"); return; }
+        try { getActivity().startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); call.resolve(); }
+        catch (ActivityNotFoundException e) { call.reject("App info couldn't be opened"); }
+    }
+
+    // (beta.13) Settings' Paste key: the text on Android's clipboard (an API key copied in a browser), or "" when there's
+    // none. Android 10+ lets only the app in front read it, which Boxshelf is while its keyboard is up.
+    @PluginMethod
+    public void clipRead(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            String text = "";
+            try {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager) getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                ClipData c = cm != null ? cm.getPrimaryClip() : null;
+                if (c != null && c.getItemCount() > 0) { CharSequence t = c.getItemAt(0).coerceToText(getContext()); if (t != null) text = t.toString(); }
+            } catch (RuntimeException ignored) {}
+            if (text.length() > 4000) text = text.substring(0, 4000);
+            JSObject r = new JSObject(); r.put("text", text); call.resolve(r);
+        });
     }
 
     // ---------- the Home screen (Boxshelf as the Thor's launcher, and the way back out) ----------
@@ -2296,6 +2339,13 @@ public class BoxshelfNativePlugin extends Plugin {
     private static volatile boolean gameOn = false;
     private volatile long launchedAt = 0;
     private volatile boolean keepBottom = false; // (beta.12) the last game launched doesn't use the bottom screen: Boxshelf's stays up
+    private volatile boolean sideApp = false;    // (beta.13) the last app was opened on the bottom screen: the shelf on top stays live
+    private volatile long sideAt = 0;
+    // (beta.13) read by MainActivity when it pauses: Boxshelf's bottom page is still on show (a game or app on top that
+    // doesn't use it), so the app-wide pauseTimers() would freeze it; the top page only stops drawing then
+    static volatile boolean bottomStaysUp = false;
+    // (beta.13) an app opened on the bottom screen: the top page isn't paused at all
+    static volatile boolean topStaysUp = false;
 
     static void setGameOn(boolean on) { synchronized (awayLock) { gameOn = on; if (!on) awayLock.notifyAll(); } }
 
@@ -2314,19 +2364,25 @@ public class BoxshelfNativePlugin extends Plugin {
     @Override
     protected void handleOnResume() {
         setGameOn(false);
+        bottomStaysUp = false; topStaysUp = false;
         notifyListeners("resume", new JSObject());
         if (bottom != null) bottom.onResume();
     }
 
     @Override
     protected void handleOnPause() {
+        // (beta.13) an app just opened on the bottom screen: the shelf on top is still what's on show, nothing pauses
+        if (sideApp && bottom != null && bottom.isAway() && android.os.SystemClock.uptimeMillis() - sideAt < 10_000L) { topStaysUp = true; return; }
+        topStaysUp = false;
         boolean game = android.os.SystemClock.uptimeMillis() - launchedAt < 10_000L; // (a launch() just now: the game is what took over)
         if (game) setGameOn(true);
         notifyListeners("pause", new JSObject());
         // the game gets the bottom screen when it uses one (DS / 3DS / Wii U emulators, bottom-screen mods); any other
         // game leaves Boxshelf's bottom screen up, showing the game being played (beta.12). Anything else that comes in
         // front (Android's settings, another app) gets it back as before
-        if (bottom != null && !(game && keepBottom)) bottom.onPause();
+        boolean keep = game && keepBottom && bottom != null && !bottom.isAway();
+        bottomStaysUp = keep;
+        if (bottom != null && !keep) bottom.onPause();
     }
 
     @Override

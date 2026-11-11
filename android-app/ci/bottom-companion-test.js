@@ -94,9 +94,36 @@ module.exports = async function bottomCompanionPass({ browser, base, check }) {
     await until(async () => (await fr.evaluate(() => document.querySelectorAll('img.ap-ic').length)) > 0);
     o.apps = { n: (await bs()).apps, imgs: await fr.evaluate(() => document.querySelectorAll('img.ap-ic').length), asks: await p.evaluate(() => (window.__fakeIconAsks || []).slice()) };
     const l0 = await p.evaluate(() => window.__fakeLaunches.length);
-    await fr.evaluate(() => document.querySelector('.ap').click()); await p.waitForTimeout(900);
+    // (an app that draws on one screen: a DS / 3DS emulator takes both, checked next)
+    const DUAL = '(melonds|drastic|citra|azahar|lime3ds|borked3ds|mandarine|panda3ds|cemu)';
+    await fr.evaluate(re => ([...document.querySelectorAll('.ap')].find(b => !new RegExp(re, 'i').test(b.dataset.pkg)) || document.querySelector('.ap')).click(), DUAL); await p.waitForTimeout(900);
     o.apps.launched = (await p.evaluate(() => window.__fakeLaunches.length)) - l0;
+    o.apps.keep = await p.evaluate(() => { const r = window.__fakeLaunches[window.__fakeLaunches.length - 1] || {}; return { pkg: r.pkg, keepBottom: r.keepBottom, screen: r.screen || '' }; });
+    await p.waitForTimeout(1800);
+    o.apps.dual = await fr.evaluate(re => { const b = [...document.querySelectorAll('.ap')].find(b => new RegExp(re, 'i').test(b.dataset.pkg)); if (b) b.click(); return b ? b.dataset.pkg : null; }, DUAL); await p.waitForTimeout(900);
+    if (o.apps.dual) o.apps.dualKeep = await p.evaluate(() => (window.__fakeLaunches[window.__fakeLaunches.length - 1] || {}).keepBottom);
     await p.waitForTimeout(1800); // (the pretend app "closes")
+    // ----- (beta.13) holding an app: its menu (top / bottom screen, Shortcuts, App info) -----
+    const hold = () => fr.evaluate(async () => { const b = document.querySelector('.ap'), r = b.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 5, clientX: x, clientY: y })); await new Promise(f => setTimeout(f, 750));
+      b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 5, clientX: x, clientY: y })); b.click(); await new Promise(f => setTimeout(f, 200));
+      const m = document.getElementById('apMenu'); return { pkg: b.dataset.pkg, shown: !!m && !m.hidden, items: m ? [...m.querySelectorAll('[data-am]')].map(x => x.dataset.am).join() : '' }; });
+    const hm = { l0: await p.evaluate(() => window.__fakeLaunches.length) };
+    hm.menu = await hold(); hm.noLaunch = (await p.evaluate(() => window.__fakeLaunches.length)) === hm.l0; // (the hold's own tap opens nothing)
+    await fr.evaluate(() => document.querySelector('#apMenu [data-am="bottom"]').click()); await p.waitForTimeout(800);
+    hm.bottom = await p.evaluate(() => { const r = window.__fakeLaunches[window.__fakeLaunches.length - 1] || {}; return { screen: r.screen, pkg: r.pkg, chip: !!document.getElementById('bsAwayChip'), away: boxshelf.bottomAway && boxshelf.bottomAway() }; });
+    hm.closed = await fr.evaluate(() => document.getElementById('apMenu').hidden);
+    await p.evaluate(() => document.getElementById('bsAwayChip').click()); await p.waitForTimeout(500);
+    hm.back = await p.evaluate(() => ({ called: (window.__fakeCalls || []).includes('bottomBack'), chip: !!document.getElementById('bsAwayChip'), away: boxshelf.bottomAway() }));
+    await hold(); await fr.evaluate(() => document.querySelector('#apMenu [data-am="info"]').click()); await p.waitForTimeout(500);
+    hm.info = await p.evaluate(pkg => (window.__fakeCalls || []).includes('appInfo:' + pkg), hm.menu.pkg);
+    await hold(); await fr.evaluate(() => document.querySelector('#apMenu [data-am="sc"]').click()); await p.waitForTimeout(300);
+    hm.sc = await fr.evaluate(pkg => JSON.parse(localStorage.getItem('bs-bottom:shortcuts') || localStorage.getItem('shortcuts') || '[]').includes('app:' + pkg) || [...document.querySelectorAll('#more [data-sc]')].some(b => b.dataset.sc === 'app:' + pkg), hm.menu.pkg);
+    await fr.evaluate(() => bsBottom.setTab('more')); await p.waitForTimeout(400);
+    hm.scTile = await fr.evaluate(pkg => !!document.querySelector(`#more [data-sc="app:${pkg}"]`), hm.menu.pkg);
+    await fr.evaluate(() => bsBottom.setTab('apps')); await p.waitForTimeout(400);
+    o.hold = hm;
+    o.clip = await p.evaluate(async () => { window.__fakeClip = 'KEY-42'; return typeof boxshelf.clipRead === 'function' ? await boxshelf.clipRead() : null; });
     await fr.evaluate(() => document.querySelector('.ap-s[data-sa="wifi"]').click()); await p.waitForTimeout(500);
     o.apps.wifi = await p.evaluate(() => (window.__fakeCalls || []).includes('openSettingsPage:wifi'));
     // ----- Screen off -----
@@ -133,6 +160,15 @@ module.exports = async function bottomCompanionPass({ browser, base, check }) {
     R.ctx === 'reader' && R.p1 > R.p0 && /Page|Pages/.test(R.label || '') && R.one1 === !R.one0 && R.zoom === true && R.fit === false && R.after && !R.after.open && R.after.ctx === null, JSON.stringify(R));
   check('Bottom screen: Apps lists the device\'s apps with their icons (asked for 12 at a time at most), a touch opens one, Wi-Fi opens Android\'s page',
     A.n > 0 && A.imgs > 0 && Array.isArray(A.asks) && A.asks.length > 0 && A.asks.every(n => n <= 12) && A.launched === 1 && A.wifi, JSON.stringify(A));
+  check('Bottom screen (beta.13): an app opened with a tap goes to the top screen and leaves Boxshelf\'s bottom screen up; a DS / 3DS emulator gets both screens',
+    (A.keep || {}).keepBottom === true && (A.keep || {}).screen === '' && (!A.dual || A.dualKeep === false), JSON.stringify({ keep: A.keep, dual: A.dual, dualKeep: A.dualKeep }));
+  const H = o.hold || {};
+  check('Bottom screen (beta.13): holding an app opens its menu (top screen, bottom screen, Shortcuts, App info, Cancel) and opens nothing itself',
+    !!H.menu && H.menu.shown && H.menu.items === 'top,bottom,sc,info,x' && H.noLaunch, JSON.stringify(H));
+  check('Bottom screen (beta.13): "Open on bottom screen" opens the app there; the top screen shows a button that brings Boxshelf\'s bottom screen back',
+    !!H.bottom && H.bottom.screen === 'bottom' && H.bottom.pkg === (H.menu || {}).pkg && H.bottom.chip && H.bottom.away === H.bottom.pkg && H.closed && !!H.back && H.back.called && !H.back.chip && H.back.away === '', JSON.stringify(H));
+  check('Bottom screen (beta.13): the app menu opens Android\'s App info and adds the app to Shortcuts', H.info === true && H.scTile === true, JSON.stringify({ info: H.info, sc: H.sc, scTile: H.scTile }));
+  check('Android (beta.13): the clipboard is read through the plugin (Settings\' Paste key)', o.clip === 'KEY-42', String(o.clip));
   check('Bottom screen: Screen off goes dark, keeps what the shelf sends meanwhile, and a tap wakes it showing the game now in view',
     Z.tile && Z.dark && Z.sent && Z.kept && Z.awake && Z.caught, JSON.stringify(Z));
   check('Bottom companion pass: no script errors', !errors.length, errors.slice(0, 3).join(' | '));

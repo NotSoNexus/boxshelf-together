@@ -689,3 +689,15 @@ body.studio.ctx-on #views{opacity:1;visibility:visible;pointer-events:auto}
 .dt-acts .cx-b{flex:1;height:72px}
 .dt-fav.on svg{color:#ff6f91}
 .dt-fav.on svg path{fill:currentColor}
+/* (beta.13) an app held: its menu, a sheet over the screen (the Settings look: a plain list, no pills) */
+.apm{position:absolute;inset:0;z-index:60;background:rgba(5,5,10,.62);display:flex;align-items:center;justify-content:center}
+.apm[hidden]{display:none}
+.apm-card{width:400px;max-width:calc(100% - 40px);border-radius:18px;background:#15151f;box-shadow:inset 0 0 0 1px var(--line),0 18px 40px rgba(0,0,0,.55);padding:8px 0;overflow:hidden}
+.apm-head{display:flex;align-items:center;gap:14px;padding:10px 20px 12px;border-bottom:1px solid var(--line)}
+.apm-head .ap-ic{width:44px;height:44px;border-radius:12px;font-size:18px;box-shadow:none}
+.apm-head b{font-size:17px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apm-card>button{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:0 20px;border:0;background:none;color:var(--ink);font:500 16px var(--ui);text-align:left;cursor:pointer}
+.apm-card>button small{margin-left:auto;font-size:12px;color:var(--faint);white-space:nowrap}
+.apm-card>button:active{background:rgba(255,255,255,.07)}
+.apm-card>.apm-x{color:var(--dim);border-top:1px solid var(--line);margin-top:4px}
+.ap.held,.tile.mine.held{background:rgba(185,166,255,.18)}
