@@ -998,7 +998,11 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
   handle('online:linkEmail', ({ email }) => online.linkEmail(email));
   handle('online:confirmEmail', ({ email, code }) => online.confirmEmail(email, code));
   handle('online:setPassword', ({ newPassword, currentPassword }) => online.setPassword(newPassword, currentPassword));
-  handle('online:sync', () => { const p = profiles.current(); return online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner }); });
+  handle('online:sync', () => {
+    history = null; // forzar recarga fresca de history.json desde el disco
+    const p = profiles.current();
+    return online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner });
+  });
   handle('online:upload', ({ kind, data }) => online.upload(kind, data));
   handle('online:friends', () => online.friends());
   handle('online:friendAdd', ({ code }) => online.add(code));
