@@ -939,7 +939,32 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
     try {
       const cur = profiles.current();
       if (cur && cur.id && res && res.name) {
-        profiles.update(cur.id, { name: res.name });
+        const patch = { name: res.name };
+        // Si el usuario en el servidor tiene avatar o banner, descargarlos a la carpeta del perfil local
+        try {
+          const profileData = await online.view(res.friendCode);
+          if (profileData) {
+            if (profileData.description) patch.description = profileData.description;
+            const pDir = path.join(paths.dataDir(), 'profiles', cur.id);
+            fs.mkdirSync(pDir, { recursive: true });
+            const srv = online.server();
+            if (profileData.avatar && typeof profileData.avatar === 'string') {
+              const avUrl = profileData.avatar.startsWith('http') ? profileData.avatar : srv + profileData.avatar;
+              const avDest = path.join(pDir, 'avatar.jpg');
+              const okAv = await covers.download(avUrl, avDest);
+              if (okAv && fs.existsSync(avDest)) patch.avatar = avDest;
+            }
+            if (profileData.banner && typeof profileData.banner === 'string') {
+              const bnUrl = profileData.banner.startsWith('http') ? profileData.banner : srv + profileData.banner;
+              const bnDest = path.join(pDir, 'banner.jpg');
+              const okBn = await covers.download(bnUrl, bnDest);
+              if (okBn && fs.existsSync(bnDest)) patch.banner = bnDest;
+            }
+          }
+        } catch (errSync) {
+          log('online login sync error', errSync.message);
+        }
+        profiles.update(cur.id, patch);
       }
     } catch {}
     return res;
