@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('boxshelf', {
   cachedLibrary: () => call('library:cached'),
   homeMeta: meta => ipcRenderer.send('home:meta', meta),
   pick: opts => call('dialog:pick', opts),
+  pickMusic: () => call('music:pick'),
   launchGame: (systemId, file, emulator) => call('launch:game', { systemId, file, emulator }),
   customThemes: () => call('customThemes:list'), // (1.76) picture themes: Custom themes\<name>\
   customThemeCreate: (file, name) => call('customThemes:create', { file, name }),
@@ -197,6 +198,8 @@ contextBridge.exposeInMainWorld('boxshelf', {
   reportProblem: () => call('app:reportProblem'),
   clearHistory: () => call('history:clear'),
   onHistoryChanged: fn => ipcRenderer.on('history:changed', (e, info) => fn(info)),
+  padBattery: () => call('pad:battery'),
+  onPadBattery: fn => ipcRenderer.on('pad:battery', (e, d) => fn(d)),
   apiStatus: () => call('api:status'),
   testApi: service => call('api:test', { service: String(service || '') }),
   clipboardText: () => call('clipboard:text'), // (beta.9) setup's Paste buttons

@@ -19,6 +19,7 @@ paths.setAppRoot(linux.isLinux ? linux.appRoot(app.isPackaged, __dirname) : app.
 const config = require('./main/config');
 const profiles = require('./main/profiles');
 const online = require('./main/online');
+const padbattery = require('./main/padbattery');
 const { CONSOLES, APPS } = require('./main/systems');
 const { detectAll, detectSystem, findSteam } = require('./main/detect');
 const { scanSystem: scanFolders, scanSystemAsync: scanFoldersAsync, forget: scanForget, setLog: scanSetLog } = require('./main/scanner'); // (beta.9: scanForget clears the scanner's kept scans)
@@ -251,6 +252,7 @@ function computeRoots() {
   const roots = [path.join(paths.appRoot(), 'themes'), path.join(paths.appRoot(), 'Custom themes'), path.join(app.getPath('userData'), 'custom-theme-cache'), icons.folder(), ...library.roots()].filter(Boolean); // (custom themes: their pictures, and the scaled copies of big ones)
   for (const s of Object.values(cfg.systems)) { roots.push(...(s.romDirs || [])); if (s.artDir) roots.push(paths.expand(s.artDir)); }
   roots.push(path.join(app.getPath('userData'), 'stremio-art'), path.join(app.getPath('userData'), 'commercials')); // the movie shelves' posters and art; the retro TV's ads
+  roots.push(path.join(app.getPath('userData'), 'music')); // (beta.13) a menu music file of your own, copied here by music:pick
   if (paths.artLibrary()) roots.push(paths.artLibrary());
   if (artstudio.cacheDir()) roots.push(artstudio.cacheDir()); // Art Studio's downloaded candidates (the picker's thumbnails)
   if (manualstudio.cacheDir()) roots.push(manualstudio.cacheDir()); // Manual Studio's first-page previews and PDFs (also read by the PDF helper by address)
@@ -259,7 +261,7 @@ function computeRoots() {
   return roots.filter(Boolean).map(r => { r = path.resolve(r).toLowerCase(); return r.endsWith(path.sep) ? r : r + path.sep; });
 }
 
-const MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', gif: 'image/gif', mp4: 'video/mp4', m4v: 'video/mp4', m4a: 'audio/mp4', webm: 'video/webm', mov: 'video/quicktime', glb: 'model/gltf-binary', gltf: 'model/gltf+json', bin: 'application/octet-stream', json: 'application/json' };
+const MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', gif: 'image/gif', mp4: 'video/mp4', m4v: 'video/mp4', m4a: 'audio/mp4', webm: 'video/webm', mov: 'video/quicktime', glb: 'model/gltf-binary', gltf: 'model/gltf+json', bin: 'application/octet-stream', json: 'application/json', mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac', aac: 'audio/aac' }; // (the audio ones: a menu music file of your own)
 
 // Covers are asked for at the size they're shown (bsfile://…?t=<height>): big scans (Steam's are 1200×1800) are
 // scaled once, kept in data\thumbs and served from there, so the shelf never decodes or holds full-size images.
@@ -597,7 +599,7 @@ function onExit(info) {
   if (quick) { const def = CONSOLES.find(c => c.id === lastLaunch.systemId); info = { ...info, quick: true, emulatorName: (def && def.emulatorName) || 'The emulator', flatpakFix: flatpakFix(lastLaunch) }; log('Emulator closed right away:', info.emulatorName, 'code', info.code, info.ms + ' ms'); }
   if (quitAt) { log('game closed', Date.now() - quitAt, 'ms after Quit' + (Date.now() - quitAt > 2400 ? ' (had to be forced)' : '')); quitAt = 0; }
   padwatch.stop(); homemenu.end(); if (info && (info.failedToStart || info.quick)) historyUndo(); else historyEnd();
-  setTimeout(() => { try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner, playing: '' }); } catch {} }, 1500); // the profile's hours land on the server quietly
+  setOnlinePresence(''); // presencia reseteada y horas sincronizadas
   if (coverTimer && coverTimer.keep) clearInterval(coverTimer.keep);
   // the emulator died inside the cover window: undo the temporary fullscreen too
   if (coverWindowed && alive()) { try { win.setFullScreen(false); } catch {} coverWindowed = false; }
@@ -884,8 +886,8 @@ ipcMain.on('home:meta', (e, m) => { if (!m || typeof m !== 'object') return; con
   homemenu.setMeta({ title: str(m.title), cover: str(m.cover), accent: /^#[0-9a-f]{3,8}$/i.test(m.accent || '') ? m.accent : undefined, glyphs: glyphsOf(m.glyphs), layout: cfg.ui.homeLayout === 'center' ? 'center' : 'side' }); });
 emucfg.init(log);
 modelfind.init(log);
-app.on('will-quit', () => { try { config.flush(); } catch {} }); // (beta.9: settings still waiting to be written go to disk now)
-app.on('before-quit', () => { if (tbHidden) { tbHidden = false; padwatch.stop(); padwatch.taskbarSync(true); try { fs.unlinkSync(tbMark()); } catch {} log('Taskbar back (Boxshelf quitting)'); } /* (beta.6) */ clearTimeout(scaleT); historyEnd(); companion.stop().catch(() => {}); /* the phone companion's server and its connections */ padwatch.stop(); wiimote.stop(); homemenu.end(); modelfind.stop(); clearQuitCover(); clearTimeout(focusOnlyT); if (coverTimer) { clearInterval(coverTimer.keep); clearTimeout(coverTimer); coverTimer = null; }
+app.on('will-quit', () => { try { config.flush(); } catch {}; try { padbattery.stop(); } catch {} }); // (beta.9: settings still waiting to be written go to disk now)
+app.on('before-quit', () => { if (onlinePresenceTimer) { clearInterval(onlinePresenceTimer); onlinePresenceTimer = null; } try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner, playing: '' }); } catch {} if (tbHidden) { tbHidden = false; padwatch.stop(); padwatch.taskbarSync(true); try { fs.unlinkSync(tbMark()); } catch {} log('Taskbar back (Boxshelf quitting)'); } /* (beta.6) */ clearTimeout(scaleT); historyEnd(); companion.stop().catch(() => {}); /* the phone companion's server and its connections */ padwatch.stop(); wiimote.stop(); homemenu.end(); modelfind.stop(); clearQuitCover(); clearTimeout(focusOnlyT); if (coverTimer) { clearInterval(coverTimer.keep); clearTimeout(coverTimer); coverTimer = null; }
   romWatchers.forEach(w => { try { w.close(); } catch {} }); romWatchers = []; clearTimeout(romWatchT); clearTimeout(iconLateT); Object.values(retestT).forEach(clearTimeout); if (moving) clearTimeout(moving.t); });
 function handle(name, fn) {
   ipcMain.handle(name, async (e, ...args) => {
@@ -915,6 +917,10 @@ handle('clipboard:text', () => { const { clipboard } = require('electron'); retu
   handle('online:friendAdd', ({ code }) => online.add(code));
   handle('online:friendRemove', ({ code }) => online.remove(code));
   handle('online:view', ({ code }) => online.view(code));
+
+  // ---------- the controller's battery, for the shelf's HUD (Chromium never reports it) ----------
+  padbattery.init(d => { try { if (alive()) win.webContents.send('pad:battery', d); } catch {} }, log);
+  handle('pad:battery', () => padbattery.last());
   handle('profiles:select', ({ id }) => {
     if (launcher.isRunning()) throw new Error('Cierra el juego antes de cambiar de perfil.');
     config.flush(); profiles.select(String(id || '')); config.useFile(profiles.configFile());
@@ -1446,6 +1452,24 @@ handle('dialog:pick', async ({ kind, title, defaultPath, filters, multi }) => {
   });
   return r.canceled ? null : multi ? r.filePaths : r.filePaths[0];
 });
+// (beta.13) menu music of your own: the file is copied into userData\music, so it keeps playing even if the original is
+// moved, renamed or on a drive that isn't there. One file at a time; picking another replaces it.
+handle('music:pick', async () => {
+  const r = await openDialog(win, {
+    title: 'Choose your menu music',
+    properties: ['openFile'],
+    filters: [{ name: 'Audio', extensions: ['mp3', 'ogg', 'oga', 'opus', 'wav', 'flac', 'm4a', 'aac'] }]
+  });
+  const src = r && !r.canceled && r.filePaths && r.filePaths[0];
+  if (!src) return null;
+  const dir = path.join(app.getPath('userData'), 'music');
+  await fs.promises.mkdir(dir, { recursive: true });
+  const ext = (path.extname(src) || '.mp3').toLowerCase();
+  const out = path.join(dir, 'custom-' + Date.now().toString(36) + ext); // a new name each time: the old address can't come back from the web cache
+  for (const f of await fs.promises.readdir(dir).catch(() => [])) { const p = path.join(dir, f); if (/^custom[-.]/i.test(f) && p.toLowerCase() !== out.toLowerCase()) fs.promises.unlink(p).catch(() => {}); }
+  await fs.promises.copyFile(src, out);
+  return { file: out, name: path.basename(src), url: fileUrl(out) };
+});
 // ---------- (beta.7) Add games (main/addgames.js): a folder of games scanned; Playnite's library read (experimental) ----------
 handle('games:scanFolder', ({ root }) => { const r = addgames.scanFolder(String(root || '')); return { ...r, games: r.games.map(g => ({ ...g, title: g.title })) }; });
 handle('games:titleFor', ({ exes }) => (Array.isArray(exes) ? exes : []).slice(0, 500).map(e => ({ exe: String(e), title: addgames.titleFor(String(e)) })));
@@ -1655,7 +1679,7 @@ async function launchGameNow(systemId, file, sc) {
   // Dolphin: the Wii remote is let go first, so Dolphin finds it as it always does
   if (systemId === 'gc' || systemId === 'wii' || /dolphin/i.test(path.basename(sc.emulator || ''))) await wiimote.pause();
   await taskbarHide(); // (beta.6) gone before the emulator's first window can show
-  let r; try { r = launcher.launchGame(sc, rom, onExit, extra, env); } catch (e) { wiimote.resume(); taskbarShow('the game did not start'); throw e; } runKind = 'game'; pendingPower = null; launcher.setRunningName(gameTitleOf(systemId, file)); if (linux.isLinux) linuxpad.begin(() => closeGame()); // (beta.9: hold Select + Start to close it)
+  let r; try { r = launcher.launchGame(sc, rom, onExit, extra, env); } catch (e) { wiimote.resume(); taskbarShow('the game did not start'); throw e; } runKind = 'game'; pendingPower = null; const gTitle_ = gameTitleOf(systemId, file); launcher.setRunningName(gTitle_); { const d_ = CONSOLES.find(c => c.id === systemId); setOnlinePresence(d_ ? `${gTitle_} (${d_.name})` : gTitle_); } if (linux.isLinux) linuxpad.begin(() => closeGame()); // (beta.9: hold Select + Start to close it)
   // (Dolphin: once it has the remote, Boxshelf listens alongside for a held Home; listening only, nothing is sent)
   if (systemId === 'gc' || systemId === 'wii' || /dolphin/i.test(path.basename(sc.emulator || ''))) setTimeout(() => { if (launcher.isRunning()) wiimote.watch(); }, 4000);
   lastLaunch = { systemId, at: Date.now(), rom: String(rom || ''), exe: String(sc.emulator || '') }; historyStart(systemId + ':' + file); // (beta.12: the game and emulator, for the Linux Flatpak hint)
@@ -1696,7 +1720,7 @@ async function launchViaRocket(systemId, file, sc) {
   const t0 = Date.now();
   const done = info => { rocket.lastError(exe, t0).then(err => { if (err && info && !info.error && info.code !== -1) log('RocketLauncher said:', err); onExit(err && info && !info.error ? { ...info, error: 'RocketLauncher: ' + err } : info); }, () => onExit(info)); };
   let r; try { r = launcher.launchRocket(exe, a.args, done); } catch (e) { taskbarShow('the game did not start'); throw e; }
-  runKind = 'game'; pendingPower = null; launcher.setRunningName(gameTitleOf(systemId, file));
+  runKind = 'game'; pendingPower = null; const gTitle_ = gameTitleOf(systemId, file); launcher.setRunningName(gTitle_); { const d_ = CONSOLES.find(c => c.id === systemId); setOnlinePresence(d_ ? `${gTitle_} (${d_.name})` : gTitle_); }
   log('RocketLauncher launch:', systemId, '-s', system, a.inRoms ? '(by name)' : '(by path)');
   lastLaunch = { systemId, at: Date.now() }; historyStart(systemId + ':' + file);
   const def = CONSOLES.find(c => c.id === systemId);
@@ -1801,7 +1825,7 @@ const busyCheck = () => { if (launching || launcher.isRunning()) throw new Error
 // (beta.10) a game's title for that message: the shelf's (the last scan), else its file or folder name, never a path
 function gameTitleOf(systemId, file) { try { const s = (lastLib || []).find(x => x.id === systemId), lo = String(file).toLowerCase(), g = s && (s.games || []).find(x => String(x.file || '').toLowerCase() === lo); if (g && g.title) return String(g.title); } catch {}
   const f = String(file || ''), b = path.basename(f); return /^(main|.+\.rpx)$/i.test(b) ? path.basename(path.dirname(path.dirname(f))) : /^(eboot\.bin|default\.xex)$/i.test(b) ? path.basename(path.dirname(f)) : path.basename(b, path.extname(b)); } // (a Wii U code\x.rpx, a Switch 2 exefs\main: the game's folder)
-handle('launch:emulator', async ({ systemId }) => { let sc = cfg.systems[systemId]; if (!sc) throw new Error('Unknown system.'); busyCheck(); sc = { ...sc, emulator: emuPath(sc.emulator) }; const wii = systemId === 'gc' || systemId === 'wii' || /dolphin/i.test(path.basename(sc.emulator || '')); if (wii) { launching = true; try { await wiimote.pause(); } finally { launching = false; } } /* (beta.8: a second press while the Wii remote lets go is refused, as for games) */ /* (Dolphin: the Wii remote is its) */ if (systemId === 'ps5') { const ui = ['kyty_launcher.exe', 'launcher.exe'].map(n => path.join(path.dirname(sc.emulator || ''), n)).find(paths.isFile); if (ui) sc.emulator = ui; } /* (PS5: kyty_emulator needs a game; the emulator on its own is Kyty's launcher) */ emucfg.beforeLaunch(systemId, sc.emulator, { quitCombo: cfg.ui.quitCombo === false ? null : (cfg.ui.quitComboKeys || 'l3+r3') }); taskbarShow('an emulator in its own window'); /* (beta.10: still hidden from the last game, it stayed gone over the emulator's window) */ let r; try { r = launcher.launchEmulator(sc, onExit); } catch (e) { if (wii) wiimote.resume(); throw e; } /* (1.82: a missing exe no longer leaves the remote paused) */ runKind = 'emulator'; pendingPower = null; { const def = CONSOLES.find(c => c.id === systemId); if (def && def.emulatorName) launcher.setRunningName(def.emulatorName); } watchPad(); return r; });
+handle('launch:emulator', async ({ systemId }) => { let sc = cfg.systems[systemId]; if (!sc) throw new Error('Unknown system.'); busyCheck(); sc = { ...sc, emulator: emuPath(sc.emulator) }; const wii = systemId === 'gc' || systemId === 'wii' || /dolphin/i.test(path.basename(sc.emulator || '')); if (wii) { launching = true; try { await wiimote.pause(); } finally { launching = false; } } /* (beta.8: a second press while the Wii remote lets go is refused, as for games) */ /* (Dolphin: the Wii remote is its) */ if (systemId === 'ps5') { const ui = ['kyty_launcher.exe', 'launcher.exe'].map(n => path.join(path.dirname(sc.emulator || ''), n)).find(paths.isFile); if (ui) sc.emulator = ui; } /* (PS5: kyty_emulator needs a game; the emulator on its own is Kyty's launcher) */ emucfg.beforeLaunch(systemId, sc.emulator, { quitCombo: cfg.ui.quitCombo === false ? null : (cfg.ui.quitComboKeys || 'l3+r3') }); taskbarShow('an emulator in its own window'); /* (beta.10: still hidden from the last game, it stayed gone over the emulator's window) */ let r; try { r = launcher.launchEmulator(sc, onExit); } catch (e) { if (wii) wiimote.resume(); throw e; } /* (1.82: a missing exe no longer leaves the remote paused) */ runKind = 'emulator'; pendingPower = null; { const def = CONSOLES.find(c => c.id === systemId); if (def) { launcher.setRunningName(def.emulatorName || def.name); setOnlinePresence(def.name || def.emulatorName); } } watchPad(); return r; });
 handle('launch:app', async ({ appId, link }) => {
   const a = cfg.apps[appId]; if (!a) throw new Error('Unknown app.'); busyCheck();
   const args = appId === 'stremio' && /^stremio:\/\/\/detail\/[^\s"]+$/.test(String(link || '')) ? [String(link)] : []; // a title from the museum's movie shelves opens on its page
@@ -1809,7 +1833,7 @@ handle('launch:app', async ({ appId, link }) => {
   else taskbarShow('an app in a window'); // (beta.10: still hidden from the last game, it stayed gone over the app's window)
   let r; try { r = launcher.launchApp(a.path, onExit, args); } catch (e) { taskbarShow('the app did not start'); throw e; } runKind = 'app'; pendingPower = null;
   // Media apps don't speak controller: drive the pointer from the pad and press the fullscreen key once the window is up.
-  const meta = APPS.find(x => x.id === appId); if (meta && meta.name) launcher.setRunningName(meta.name);
+  const meta = APPS.find(x => x.id === appId); if (meta && meta.name) { launcher.setRunningName(meta.name); setOnlinePresence(meta.name); }
   if (cfg.ui.homeMenu !== false) homemenu.begin({ systemId: 'media', exe: a.path, systemName: 'Media', title: meta ? meta.name : appId, hotkeys: {} });
   watchPad({ mouse: a.padMouse === true, appPid: r.pid, fullscreenKey: a.fullscreen === false ? null : (a.fullscreenKey || 'F11'), home: true });
   // Same loading screen as the games: it stays in front while the app's window opens (windowed at first) and goes
@@ -1819,7 +1843,7 @@ handle('launch:app', async ({ appId, link }) => {
 });
 // (beta.12) Seamless play on: the Steam game is watched (main/seamless.js: the loading cover, Home menu, playtime and the
 // return to the shelf); off: handed to Steam as before
-handle('launch:steam', ({ appid }) => {
+handle('launch:steam', ({ appid }) => { try { setOnlinePresence(`${pcTitleOf('steam-' + appid, 'Steam game')} (Steam)`); } catch {}
   // (beta.12, Linux) watched there too (main/gamewatch.js reads /proc): playtime, the shelf hidden while it runs and back
   // after, and the View + Menu hold closes it
   if (linux.isLinux && /^\d{1,10}$/.test(String(appid))) { const r = seamless.launchWatched({ kind: 'steam', id: 'steam-' + appid, appid: String(appid), dir: gamewatch.steamInstallDir([steamMain, cfg.steam.path], appid), title: pcTitleOf('steam-' + appid, 'Steam game'), systemName: 'Steam', start: () => launcher.launchSteam(appid) });
@@ -1847,7 +1871,7 @@ handle('launch:pc', async ({ id }) => {
   if (!paths.isFile(g.exe)) throw new Error(`${g.title} isn't at ${g.exe} any more. ${g.source === 'quiver' ? 'Check it in Quiver Launcher.' : g.source === 'gog' ? 'Check it in GOG Galaxy.' : 'Remove it in Settings → Custom games and add it again.'}`);
   busyCheck();
   launching = true; try { await taskbarHide(); } finally { launching = false; } // (beta.6)
-  let r; try { r = launcher.launchApp(g.exe, onExit, launcher.buildArgs(g.args || '', '')); } catch (e) { taskbarShow('the game did not start'); throw e; } runKind = 'app'; pendingPower = null; launcher.setRunningName(g.title); log('PC launch:', g.source, g.title);
+  let r; try { r = launcher.launchApp(g.exe, onExit, launcher.buildArgs(g.args || '', '')); } catch (e) { taskbarShow('the game did not start'); throw e; } runKind = 'app'; pendingPower = null; launcher.setRunningName(g.title); setOnlinePresence(`${g.title} (PC)`); log('PC launch:', g.source, g.title);
   if (cfg.ui.homeMenu !== false) homemenu.begin({ systemId: 'pc', exe: g.exe, systemName: g.source === 'quiver' ? 'Quiver' : g.source === 'gog' ? 'GOG' : 'Custom', title: g.title, hotkeys: {} });
   if (seamless.on()) historyTrack(g.id); // (beta.12, Seamless play: its playtime too)
   watchPad({ mouse: false, appPid: r.pid, fullscreenKey: null, home: true });

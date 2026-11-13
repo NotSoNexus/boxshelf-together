@@ -428,9 +428,14 @@ body.reduce-motion .theme-fx i{animation:none!important}
 #app.launching .sel-halo,#app.launching .theme-fx i,body.idle-bg .sel-halo,body.idle-bg .theme-fx i{animation-play-state:paused}
 
 /* controller status beside the clock, and no mouse pointer while you're on the pad */
-.pad-stat{width:26px;height:26px;display:grid;place-items:center;color:var(--ink-dim);opacity:.35;transition:opacity .3s,color .3s}
-.pad-stat svg{width:20px;height:20px}
+.pad-stat{min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;gap:4px;color:var(--ink-dim);opacity:.35;transition:opacity .3s,color .3s}
+.pad-stat svg{width:20px;height:20px;flex:none}
 .pad-stat.on{opacity:1;color:var(--ink)}
+.pad-pct{font:800 11px/1 var(--ui,system-ui);letter-spacing:.01em;font-variant-numeric:tabular-nums;min-width:0}
+.pad-pct:empty{display:none}
+.pad-stat.low{color:#ff8272}
+.pad-stat.mid{color:#ffd178}
+.pad-stat.full{color:#9fe6a9}
 body.pad-input,body.pad-input *{cursor:none!important}
 
 /* nothing under a full-screen overlay needs to keep breathing (it forces Inspect's backdrop blur to redraw every frame) */

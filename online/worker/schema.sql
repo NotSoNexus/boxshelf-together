@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   playing     TEXT DEFAULT '',           -- "jugando ahora" (fase 3)
   tokenHash   TEXT NOT NULL,             -- la única llave de la cuenta; el token nunca se guarda tal cual
   createdAt   INTEGER,
+  updatedAt   INTEGER DEFAULT 0,
   friends     TEXT DEFAULT '[]',         -- JSON: códigos mutuos
   incoming    TEXT DEFAULT '[]',         -- JSON: solicitudes recibidas
   outgoing    TEXT DEFAULT '[]'          -- JSON: solicitudes enviadas

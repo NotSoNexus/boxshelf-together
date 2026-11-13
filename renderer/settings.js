@@ -239,7 +239,12 @@ function build(){
     T("Interface sounds","ui.sound",true,"Ticks, whooshes and chimes as you move around.",{live:v=>shelf("sound",{enabled:v,preview:v?"open":null})}),
     S("Volume","ui.volume",.7,0,1,.05,v=>Math.round(v*100)+"%","How loud Boxshelf's own sounds are. Games and apps aren't affected.",{keys:"loud quiet",live:v=>{shelf("sound",{volume:v});soundSoon("open")}}),
     {t:"choice",label:"Voice",opts:[["aero","Aero"],["melody","Melody"],["musicbox","Music box"]],path:"ui.soundTheme",d:"aero",get:()=>voiceOf(gp("ui.soundTheme")),set:v=>sp("ui.soundTheme",v),info:"Aero: soft, pure and airy; each console's shelf plays in its own key.\nMelody: a soft piano — every move plays the next note of a song, and the song changes every few minutes.\nMusic box: small steel tines, warm and gentle.",keys:"sound theme piano",live:v=>shelf("sound",{theme:v,preview:"open"})},
-    C("Menu music","ui.music",[["drift","Drift"],["night","Night"],["glow","Glow"],["off","Off"]],"off","Quiet ambient music under the shelf, like a console's home screen. Drift: airy and warm. Night: darker and slower. Glow: a slow music-box lullaby. It fades out when a game starts.",{get:()=>{const v=gp("ui.music");return ({calm:"drift",lounge:"night",chime:"glow"})[v]||v||"drift"} /* (1.75's names) */,keys:"ambient background music bgm soundtrack",live:v=>shelf("sound",{music:v})}),
+    C("Menu music","ui.music",()=>[["drift","Drift"],["night","Night"],["glow","Glow"],["custom","Your file"],["off","Off"]],"off","Quiet ambient music under the shelf, like a console's home screen. Drift: airy and warm. Night: darker and slower. Glow: a slow music-box lullaby. Your file: any song of your own (MP3, OGG, WAV, FLAC or M4A). It fades out when a game starts.",{get:()=>{const v=gp("ui.music");return ({calm:"drift",lounge:"night",chime:"glow"})[v]||v||"drift"} /* (1.75's names) */,keys:"ambient background music bgm soundtrack custom your own file song",live:v=>{
+      if(v!=="custom"){mmPrev=v;shelf("sound",{music:v});return}
+      const f=gp("ui.musicFile");
+      if(f){shelf("sound",{music:"custom",musicFile:f});return}
+      pickMusic().then(ok=>{if(!ok){sp("ui.music",mmPrev);shelf("sound",{music:mmPrev});changed({})}})}}),
+    A("Your music file","Choose…","The song Menu music plays when it's set to Your file. It's copied into Boxshelf, so it keeps playing even if the original is moved or renamed. MP3, OGG, WAV, FLAC or M4A.",()=>pickMusic(),{when:()=>gp("ui.music")==="custom",keys:"custom music file song mp3 ogg wav flac m4a choose pick",sub:()=>{const p=gp("ui.musicFile");return p?{text:String(p).split(/[\\/]/).pop()}:{text:"No file chosen yet",cls:"warn"}}}),
     S("Music volume","ui.musicLevel",.4,0,1,.05,v=>Math.round(v*100)+"%","How loud the menu music plays, under Boxshelf's other sounds.",{keys:"ambient background music bgm quiet loud",when:()=>gp("ui.music")!=="off",live:v=>shelf("sound",{musicLevel:v})}),
     C("Boot sound","ui.bootSound",[["chime","Chime"],["crystal","Crystal"],["pulse","Pulse"],["horizon","Horizon"],["keys","Keys"]],"chime","The sting that plays with a console's boot animation.",{live:v=>{shelf("sound",{boot:v});soundSoon("boot")}}),
     C("Boot screen length","ui.bootLen",[["short","Short"],["normal","Normal"],["long","Long"]],"normal","How long a console's boot screen stays up before the game starts (the built-in one; a console's own boot video plays to its end).",{keys:"boot animation intro launch time longer",when:()=>!!(window.bsPlatform&&bsPlatform.os==="android")}), // (Android only: the PC keeps its short one)
@@ -1031,6 +1036,18 @@ async function act(){const r=curRow();if(!r)return;
   else if(r.t==="action"||r.t==="folder"){if(r.dim)return;try{const p=r.run&&r.run();if(p&&p.then)await p}catch(e){toast(errMsg(e))}if(!r.keepInfo)render()}}
 function reset(){const c=curRow(),r=c&&(c.t==="result"?c.row:c);if(!r||r.d===undefined||!r.get||eq(r.get(),r.d))return;r.set(r.d);toast(`${r.label} back to default`);changed(r)}
 async function pick(o){if(!api.pick){toast("Not available here");return null}try{return await api.pick(o)}catch(e){toast(errMsg(e));return null}}
+// (beta.13) a menu music file of your own: main copies it into userData\music and returns where it landed
+let mmPrev="drift";
+async function pickMusic(){
+  if(!api.pickMusic){toast("Not available here");return false}
+  let r=null;try{r=await api.pickMusic()}catch(e){toast(errMsg(e));return false}
+  if(!r||!r.file)return false;
+  sp("ui.music","custom");sp("ui.musicFile",r.file);
+  shelf("sound",{musicFile:r.file,music:"custom"});
+  changed({});
+  toast("Menu music: "+r.name);
+  return true;
+}
 function play(k,d){if(window.Sound&&Sound.play&&gp("ui.sound")!==false)try{Sound.play(k,{dir:d||1})}catch{}}
 let sndT=0;function soundSoon(k){clearTimeout(sndT);sndT=setTimeout(()=>shelf("sound",{preview:k}),260)}
 

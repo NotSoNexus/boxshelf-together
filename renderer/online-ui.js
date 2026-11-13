@@ -105,6 +105,31 @@ function ensure() {
 .ol-friend,.ol-pend,.ol-btn,.ol-x,.ol-xsmall,.ol-stat,.ol-av{will-change:transform}
 @media(prefers-reduced-motion:reduce){#onlinePanel,#onlinePanel *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 @media(max-width:780px){.ol-grid{grid-template-columns:1fr}.ol-hero{height:140px}}
+.ol-av-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.ol-status-dot{position:absolute;bottom:0;right:0;width:13px;height:13px;border-radius:50%;border:2.5px solid #060a1c;box-sizing:border-box}
+.ol-status-dot.playing{background:#10b981;box-shadow:0 0 8px rgba(16,185,129,.9);animation:olPulseDot 1.8s infinite ease-in-out}
+.ol-status-dot.online{background:#38bdf8;box-shadow:0 0 6px rgba(56,189,248,.8)}
+.ol-status-dot.offline{background:#64748b}
+@keyframes olPulseDot{0%{transform:scale(.95);box-shadow:0 0 0 0 rgba(16,185,129,.7)}70%{transform:scale(1.15);box-shadow:0 0 0 6px rgba(16,185,129,0)}100%{transform:scale(.95);box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.ol-friend.is-playing{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.32)}
+.ol-friend.is-playing:hover,.ol-friend.is-playing.nav-focus{background:rgba(16,185,129,.18);border-color:rgba(52,211,153,.65)}
+.ol-name-row{display:flex;align-items:center;gap:7px}
+.ol-live-pill{font-size:9px;font-weight:800;letter-spacing:.08em;padding:1px 6px;border-radius:99px;background:rgba(16,185,129,.22);color:#34d399;border:1px solid rgba(52,211,153,.45);text-transform:uppercase}
+.ol-playing-text{display:flex;align-items:center;gap:5px;margin-top:2px;font-size:11.5px;color:#a7f3d0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ol-game-icon{font-size:11px}
+.ol-game-name{overflow:hidden;text-overflow:ellipsis}
+.ol-status-label{font-size:11px;font-weight:700}
+.ol-status-label.playing{color:#34d399}
+.ol-status-label.online{color:#38bdf8}
+.ol-presence-hero{display:flex;align-items:center;gap:12px;margin:14px 0 10px;padding:12px 14px;background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(6,78,59,.3));border:1px solid rgba(52,211,153,.4);border-radius:12px}
+.ol-ph-dot{width:12px;height:12px;border-radius:50%;background:#10b981;box-shadow:0 0 10px #10b981;animation:olPulseDot 1.8s infinite ease-in-out;flex:none}
+.ol-ph-body{min-width:0}
+.ol-ph-badge{font-size:9.5px;font-weight:800;letter-spacing:.1em;color:#6ee7b7;text-transform:uppercase}
+.ol-ph-title{font-size:15px;font-weight:800;color:#fff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ol-presence-status{display:inline-flex;align-items:center;gap:7px;margin:12px 0 8px;font-size:12px;color:rgba(220,235,255,.7)}
+.ol-presence-status.online{color:#7dd3fc}
+.ol-presence-status .ol-status-dot{position:relative;bottom:auto;right:auto;border:0;width:9px;height:9px}
+
 `; document.head.appendChild(st);
   el = document.createElement("div"); el.id = "onlinePanel"; document.body.appendChild(el);
   document.addEventListener("keydown", onKey, true);
@@ -216,7 +241,7 @@ async function run(fn, good) {
   let r;
   try { r = await fn(); } catch (e) { busy = false; toast(e && e.message || "Algo falló."); return; }
   busy = false; // clear before re-rendering so the buttons don't come back disabled
-  try { await render(); } catch {}
+  try { await render(); startLivePoll(); } catch {}
   if (good) toast(good, true); else if (typeof r === "string") toast(r, true);
   return r;
 }
@@ -230,7 +255,15 @@ function addFriend() {
 }
 
 /* ---------- pieces ---------- */
-const avatarHtml = (p, cls) => `<span class="ol-av ${cls || ""}">${p.avatar ? `<img src="${esc(img(p.avatar, srv))}" alt="" loading="lazy">` : esc((p.name || "?")[0].toUpperCase())}</span>`;
+const avatarHtml = (p, cls) => {
+  const isPlaying = !!(p && p.playing);
+  const isOnline = !!(p && p.isOnline);
+  const dot = isPlaying ? '<span class="ol-status-dot playing" title="Jugando ahora"></span>' : (isOnline ? '<span class="ol-status-dot online" title="En línea"></span>' : '');
+  return `<span class="ol-av-wrap ${cls || ""}">
+    <span class="ol-av ${cls || ""}">${p && p.avatar ? `<img src="${esc(img(p.avatar, srv))}" alt="" loading="lazy">` : esc(((p && p.name) || "?")[0].toUpperCase())}</span>
+    ${dot}
+  </span>`;
+};
 
 function friendRow(p, o) {
   o = o || {};
@@ -340,7 +373,7 @@ function animateIn() {
 let myCode = "";
 async function render() {
   if (!el) return;
-  el.classList.add("on"); // the screen shows right away: if a call fails, the error shows inside it
+  el.classList.add("on"); const prevScroll = el ? el.scrollTop : 0;
   try {
     const st = await api.onlineStatus(); myCode = st.friendCode || ""; srv = String(st.server || "");
     if (st.registered) {
@@ -357,7 +390,7 @@ async function render() {
         lists = p.verr ? { verr: p.verr } : { profile: p };
       } else {
         const f = await api.onlineFriends().catch(e => ({ error: (e && e.message) || "No se pudo leer la lista." }));
-        lists = f.error ? { error: f.error } : f;
+        lists = f.error ? { error: f.error } : f; if (f && Array.isArray(f.friends)) checkFriendActivity(f.friends);
       }
     }
     el.innerHTML = html(st, lists || {});
@@ -383,7 +416,7 @@ async function render() {
 
 async function open(opts) {
   opts = opts || {};
-  returnTarget = opts.from || "shelf";
+  returnTarget = opts.from || "settings"; // it is opened from Settings, so it goes back there (Settings sits over the shelf)
   ensure(); busy = false; mode = "home"; view = null; focusEl = null; prev = {}; held = null;
   el.classList.remove("closing");
   el.classList.add("on");
@@ -394,7 +427,7 @@ async function open(opts) {
 function close() {
   if (!el || !el.classList.contains("on") || isClosing) return;
   isClosing = true;
-  if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  stopLivePoll(); if (raf) { cancelAnimationFrame(raf); raf = 0; }
   try { if (window.play_) window.play_("back"); else if (window.Sound && Sound.play) Sound.play("back"); } catch {}
   el.classList.add("closing");
   setTimeout(() => {

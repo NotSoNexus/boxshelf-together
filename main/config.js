@@ -53,7 +53,7 @@ function defaults() {
     // Art Studio: styles = per console shelf style (a console without one follows defaultArtStyle(ui), i.e. the old Box art
     // region / Prefer HD settings, so nothing changes until a style is chosen); locks = per game parts auto-fetch never touches
     art: { styles: {}, locks: {} },
-    ui: { sound: true, startFullscreen: true, buttons: 'auto', performance: 'auto', quitCombo: true, quitComboKeys: 'l3+r3', soundTheme: 'aero', volume: .7, ambient: false, ambientLevel: .02, music: 'off', musicLevel: .4, rumble: true, soundRev: 4, autoCovers: false, autoManuals: false, artLibrary: '', attract: true, attractMinutes: 3, attractPace: 'normal', attractWander: true,shuffleAll: true, favorites: [], collections: [], background: 'blur', theme: 'spectrum', sort: 'az', filter: 'all', museumLight: 'gallery', homeMenu: true, homeLayout: 'side', hideTaskbar: true, seamless: true, screenMode: '', windowBounds: null, uiScale: 1, previews: 'off', previewSound: false, previewYoutube: true, previewClips: true, previewDirs: [], previewDelay: 1.5, previewHint: false, clipHint: false, deckHint: false, leaveHint: false, lastSeenVersion: '', // (beta.7) video previews; lastSeenVersion: the version whose What's new was shown: off / details / shelf (Details and behind the shelf); the first run asks
+    ui: { sound: true, startFullscreen: true, buttons: 'auto', performance: 'auto', quitCombo: true, quitComboKeys: 'l3+r3', soundTheme: 'aero', volume: .7, ambient: false, ambientLevel: .02, music: 'off', musicLevel: .4, musicFile: '', rumble: true, soundRev: 4, autoCovers: false, autoManuals: false, artLibrary: '', attract: true, attractMinutes: 3, attractPace: 'normal', attractWander: true,shuffleAll: true, favorites: [], collections: [], background: 'blur', theme: 'spectrum', sort: 'az', filter: 'all', museumLight: 'gallery', homeMenu: true, homeLayout: 'side', hideTaskbar: true, seamless: true, screenMode: '', windowBounds: null, uiScale: 1, previews: 'off', previewSound: false, previewYoutube: true, previewClips: true, previewDirs: [], previewDelay: 1.5, previewHint: false, clipHint: false, deckHint: false, leaveHint: false, lastSeenVersion: '', // (beta.7) video previews; lastSeenVersion: the version whose What's new was shown: off / details / shelf (Details and behind the shelf); the first run asks
       // 1.55 Settings
       updateCheck: true, // (1.82) Settings → System → Check for new betas
       openInto: 'last', display: '', safeArea: 100, clock: 'full', clock24: false, reduceMotion: false, dimMinutes: 0, confirmButton: 'auto', scrollSpeed: 'normal', artRegion: 'auto', audioOut: '', hidden: [], museumStyle: { walkIn: true } }
@@ -100,7 +100,8 @@ function upgrade(cfg) {
     // 1.77: the ambient tracks (Drift / Night / Glow) took over from Calm / Lounge / Chime. (1.82: new installs start with
     // the music off; a saved config always has ui.music, so existing choices are kept)
     const MU = { calm: 'drift', lounge: 'night', chime: 'glow' }; if (MU[cfg.ui.music]) cfg.ui.music = MU[cfg.ui.music];
-    if (!['drift', 'night', 'glow', 'off'].includes(cfg.ui.music || 'drift')) cfg.ui.music = 'drift';
+    if (!['drift', 'night', 'glow', 'custom', 'off'].includes(cfg.ui.music || 'drift')) cfg.ui.music = 'drift';
+    if (typeof cfg.ui.musicFile !== 'string') cfg.ui.musicFile = '';
     if (!['chime', 'crystal', 'pulse', 'horizon', 'keys'].includes(cfg.ui.bootSound || 'chime')) cfg.ui.bootSound = 'chime';
   }
   for (const s of CONSOLES) {
