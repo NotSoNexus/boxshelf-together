@@ -716,8 +716,10 @@ function startLivePoll() {
   stopLivePoll();
   livePollTimer = setInterval(async () => {
     if (!el || !el.classList.contains("on") || isClosing || busy) return;
+    if (typing()) return;
     try {
       if (mode === "home") {
+        if (homeTab !== "friends") return;
         const f = await api.onlineFriends();
         if (f && Array.isArray(f.friends)) {
           checkFriendActivity(f.friends);
@@ -727,7 +729,7 @@ function startLivePoll() {
         await render(true);
       }
     } catch {}
-  }, 9000);
+  }, 12000);
 }
 
 function stopLivePoll() {
@@ -749,7 +751,7 @@ function startBgPresenceCheck() {
 setTimeout(startBgPresenceCheck, 8000);
 
 let myCode = "";
-async function render() {
+async function render(soft) {
   if (!el) return;
   el.classList.add("on"); const prevScroll = el ? el.scrollTop : 0;
   try {
@@ -778,7 +780,8 @@ async function render() {
     focusEl = its.find(x => (x.dataset.olf || "") + "|" + (x.dataset.code || "") + "|" + (x.id || "") === key)
       || its.find(x => x.dataset.olf === "sync") || its[0] || null; // keep the focus where it was, never on the close button
     paint();
-    animateIn();
+    if (prevScroll && el) el.scrollTop = prevScroll;
+    if (!soft) animateIn();
     if (!raf) raf = requestAnimationFrame(poll);
   } catch (e) {
     try {
@@ -787,7 +790,7 @@ async function render() {
         <div class="ol-card" style="margin-top:22px"><span class="ol-note">Algo falló al abrir la pantalla: ${esc((e && e.message) || "error desconocido")}</span>
         <div class="ol-row" style="margin-top:10px"><button class="ol-btn" data-olf="close">Cerrar</button></div></div></div>`;
       el.querySelectorAll("[data-olf]").forEach(b => b.onclick = e => { e.stopPropagation(); focusEl = b; act(); });
-      focusEl = items()[0] || null; paint(); animateIn();
+      focusEl = items()[0] || null; paint(); if (!soft) animateIn();
     } catch {}
   }
 }
