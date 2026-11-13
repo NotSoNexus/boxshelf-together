@@ -427,13 +427,24 @@ function friendRow(p, o) {
 
 function pendingRow(p, kind) {
   const inr = kind === "in";
-  return `<div class="ol-friend" data-olf="view" data-code="${esc(p.code)}" role="button" style="margin-top:8px">
-    ${avatarHtml(p, "sm")}
-    <span class="ol-info">
-      <span class="ol-name">${esc(p.name)}</span>
-      <span class="ol-desc" style="font-family:ui-monospace,Consolas,monospace;letter-spacing:.06em;color:#93c5fd;font-size:11px">${esc(pretty(digits(p.code)) || p.code)}</span>
-    </span>
-    ${inr ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}" style="padding:6px 14px">Aceptar</button>` : `<span class="ol-tag wait" style="font-size:10px;padding:3px 9px">Esperando</span>`}
+  return `<div class="ol-card ol-pend" data-olf="view" data-code="${esc(p.code)}" role="button" style="padding:0;overflow:hidden;margin-top:12px;cursor:pointer;border-radius:14px">
+    <div style="height:64px;position:relative;background:linear-gradient(135deg,#1e3a8a,#4c1d95);overflow:hidden">
+      ${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : ""}
+      <div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 30%, rgba(5,9,26,.8) 100%)"></div>
+      <div style="position:absolute;top:6px;right:8px">
+        ${inr ? `<span class="ol-tag" style="background:rgba(59,130,246,.85);color:#fff;backdrop-filter:blur(4px);padding:2px 8px;font-size:10px">Solicitud</span>` : `<span class="ol-tag wait" style="backdrop-filter:blur(4px);padding:2px 8px;font-size:10px">Esperando</span>`}
+      </div>
+    </div>
+    <div style="padding:0 12px 10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-top:-20px;position:relative;z-index:2">
+        ${avatarHtml(p, "sm")}
+        <div style="min-width:0;flex:1;padding-top:14px">
+          <div class="ol-name" style="font-size:14.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div>
+          <div class="ol-desc" style="font-family:ui-monospace,Consolas,monospace;letter-spacing:.05em;color:#93c5fd;font-size:11px">${esc(pretty(digits(p.code)) || p.code)}</div>
+        </div>
+        ${inr ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}" style="margin-top:14px;padding:5px 12px">Aceptar</button>` : ""}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -599,37 +610,43 @@ function friendsView(st, lists) {
 function profileView(p) {
   const hasDesc = !!(p.description && p.description.trim());
   const isPlaying = !!(p && p.playing);
-  return `<div class="ol-card ol-view" style="padding:16px;max-width:640px;margin:18px auto 0">
-    <div class="ol-hero" style="height:150px;border-radius:14px;overflow:hidden;position:relative">
-      ${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="" style="object-fit:cover;width:100%;height:100%">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#1e3a8a,#4c1d95)"></div>`}
-      <button class="ol-btn mini alt ol-back" data-olf="back" style="position:absolute;left:12px;top:12px;backdrop-filter:blur(6px);background:rgba(5,9,26,.65);border-radius:10px">← Volver</button>
+  return `<div class="ol-card ol-view" style="padding:0;overflow:hidden;max-width:640px;margin:18px auto 0">
+    <div class="ol-hero" style="height:150px;position:relative;border-radius:0;overflow:hidden">
+      ${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="" style="object-fit:cover;width:100%;height:100%;display:block">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#1e3a8a,#4c1d95)"></div>`}
+      <button class="ol-btn mini alt ol-back" data-olf="back" style="position:absolute;left:14px;top:14px;backdrop-filter:blur(8px);background:rgba(5,9,26,.7);border-radius:10px">← Volver</button>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:14px;padding:0 14px;margin-top:-26px;position:relative">
-      ${avatarHtml(p)}
-      <div style="padding-bottom:4px;min-width:0;flex:1">
-        <div class="ol-name" style="font-size:22px;line-height:1.2">${esc(p.name)}</div>
-        <div class="ol-code-s" style="margin-top:3px;font-size:12px;letter-spacing:.08em;color:#93c5fd">${esc(pretty(digits(p.code)) || p.code)}</div>
-      </div>
-      <div style="margin-left:auto;padding-bottom:4px;flex:none">
-        ${p.isFriend === false ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}">+ Agregar amigo</button>` : `<span class="ol-badge">Amigos</span>`}
-      </div>
-    </div>
-
-    ${isPlaying ? `
-      <div class="ol-presence-hero" style="margin:14px 14px 4px;padding:10px 14px;border-radius:12px">
-        <span class="ol-ph-dot"></span>
-        <div class="ol-ph-body">
-          <div class="ol-ph-badge">Jugando ahora</div>
-          <div class="ol-ph-title">${esc(p.playing)}</div>
+    
+    <div style="padding:0 20px 20px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;position:relative">
+        <div style="margin-top:-38px;position:relative;z-index:2">
+          ${avatarHtml(p)}
+        </div>
+        <div style="margin-bottom:4px">
+          ${p.isFriend === false ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}" style="padding:8px 18px">+ Agregar amigo</button>` : `<span class="ol-badge">Amigos</span>`}
         </div>
       </div>
-    ` : ""}
 
-    <div style="padding:10px 14px 4px">
-      ${hasDesc ? `<div class="ol-desc-big" style="margin-top:6px;font-size:13px;line-height:1.5;color:rgba(225,235,255,.8);max-height:85px;overflow-y:auto">${esc(p.description)}</div>` : ""}
-      <div class="ol-stats" style="margin-top:14px">
-        <span class="ol-stat"><b>${fmt(p.totalMs)}</b>Horas jugadas</span>
-        <span class="ol-stat"><b>${p.favorites || 0}</b>Favoritos</span>
+      <div style="margin-top:12px">
+        <div class="ol-name" style="font-size:24px;font-weight:800;color:#fff">${esc(p.name)}</div>
+        <div class="ol-code-s" style="margin-top:4px;font-size:13px;letter-spacing:.08em;color:#93c5fd;font-family:ui-monospace,Consolas,monospace">${esc(pretty(digits(p.code)) || p.code)}</div>
+      </div>
+
+      ${isPlaying ? `
+        <div class="ol-presence-hero" style="margin:16px 0 8px;padding:11px 14px;border-radius:12px">
+          <span class="ol-ph-dot"></span>
+          <div class="ol-ph-body">
+            <div class="ol-ph-badge">Jugando ahora</div>
+            <div class="ol-ph-title">${esc(p.playing)}</div>
+          </div>
+        </div>
+      ` : ""}
+
+      <div style="margin-top:12px">
+        ${hasDesc ? `<div class="ol-desc-big" style="margin-top:4px;font-size:13.5px;line-height:1.55;color:rgba(225,235,255,.85);max-height:90px;overflow-y:auto;padding-right:6px">${esc(p.description)}</div>` : ""}
+        <div class="ol-stats" style="margin-top:16px">
+          <span class="ol-stat"><b>${fmt(p.totalMs)}</b>Horas jugadas</span>
+          <span class="ol-stat"><b>${p.favorites || 0}</b>Favoritos</span>
+        </div>
       </div>
     </div>
   </div>`;
