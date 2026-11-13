@@ -10,6 +10,9 @@ const fmt = ms => { ms = +ms || 0; const m = Math.round(ms / 6e4); if (m < 1) re
 const ago = t => { if (!t) return "nunca"; const s = (Date.now() - t) / 1e3; return s < 90 ? "hace un momento" : s < 3600 ? "hace " + Math.round(s / 60) + " min" : s < 86400 ? "hace " + Math.round(s / 3600) + " h" : "hace " + Math.round(s / 86400) + " d"; };
 const img = (u, srv) => { u = String(u || ""); if (!u) return ""; return /^https?:/.test(u) ? u : String(srv || "").replace(/\/+$/, "") + u; }; // srv is always a string
 const localUrl = p => p ? (/^https?:|^\/img\//.test(p) ? img(p, srv) : (p.startsWith('bsfile://') ? p : 'bsfile://local/' + encodeURIComponent(p))) : '';
+// how a picture sits in its circle / strip: the same zoom & pan the profile editor saved
+const fitOf = (p, k) => { const f = (p && p.fit && p.fit[k]) || {}; const z = Math.min(3, Math.max(1, +f.z || 1)), lim = (z - 1) * 50, cl = n => Math.min(lim, Math.max(-lim, +n || 0)); return { z, x: cl(f.x), y: cl(f.y) }; };
+const fitStyle = (p, k) => { const f = fitOf(p, k); return `transform:translate(${f.x}%,${f.y}%) scale(${f.z})`; };
 const digits = s => String(s || "").replace(/\D/g, "");
 const pretty = d => /^\d{12}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8) : "";
 
@@ -445,7 +448,7 @@ const avatarHtml = (p, cls) => {
   const isOnline = !!(p && p.isOnline);
   const dot = isPlaying ? '<span class="ol-status-dot playing" title="Jugando ahora"></span>' : (isOnline ? '<span class="ol-status-dot online" title="En línea"></span>' : '');
   return `<span class="ol-av-wrap ${cls || ""}">
-    <span class="ol-av ${cls || ""}">${p && p.avatar ? `<img src="${esc(img(p.avatar, srv))}" alt="" loading="lazy">` : esc(((p && p.name) || "?")[0].toUpperCase())}</span>
+    <span class="ol-av ${cls || ""}">${p && p.avatar ? `<img src="${esc(img(p.avatar, srv))}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;${fitStyle(p, 'avatar')}">` : esc(((p && p.name) || "?")[0].toUpperCase())}</span>
     ${dot}
   </span>`;
 };
@@ -476,7 +479,7 @@ function pendingRow(p, kind) {
   const inr = kind === "in";
   return `<div class="ol-card ol-pend" data-olf="view" data-code="${esc(p.code)}" role="button" style="padding:0;overflow:hidden;margin-top:12px;cursor:pointer;border-radius:14px">
     <div style="height:64px;position:relative;background:linear-gradient(135deg,#1e3a8a,#4c1d95);overflow:hidden">
-      ${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : ""}
+      ${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;${fitStyle(p, 'banner')}">` : ""}
       <div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 30%, rgba(5,9,26,.8) 100%)"></div>
       <div style="position:absolute;top:6px;right:8px">
         ${inr ? `<span class="ol-tag" style="background:rgba(59,130,246,.85);color:#fff;backdrop-filter:blur(4px);padding:2px 8px;font-size:10px">Solicitud</span>` : `<span class="ol-tag wait" style="backdrop-filter:blur(4px);padding:2px 8px;font-size:10px">Esperando</span>`}
@@ -498,6 +501,8 @@ function pendingRow(p, kind) {
 function accountView(st) {
   const bannerSrc = localUrl(st.localBanner || (st.me && st.me.banner));
   const avatarSrc = localUrl(st.localAvatar || (st.me && st.me.avatar));
+  // the framing saved here (or on another PC) is what the card shows
+  const meFit = { fit: (st.localFit && (st.localFit.avatar || st.localFit.banner)) ? st.localFit : ((st.me && st.me.fit) || {}) };
   const desc = (st.me && st.me.description) || st.pDesc || "Tu perfil de Boxshelf Together";
   const displayHours = (st.me && st.me.totalMs != null) ? Math.max(0, +st.me.totalMs || 0) : (st.hours || 0);
   const displayFavs = (st.me && typeof st.me.favorites === 'number') ? st.me.favorites : (st.favs || 0);
@@ -505,9 +510,9 @@ function accountView(st) {
   return `<div class="ol-grid">
     <div>
       <div class="pg-card" style="width:100%;min-height:280px;cursor:default;box-sizing:border-box">
-        <span class="pg-banner">${bannerSrc ? `<img class="pg-banner-img" src="${esc(bannerSrc)}" alt="">` : ""}</span>
+        <span class="pg-banner">${bannerSrc ? `<img class="pg-banner-img" src="${esc(bannerSrc)}" alt="" style="${fitStyle(meFit, 'banner')}">` : ""}</span>
         <span class="pg-shade"></span>
-        <span class="pp-avatar pg-avatar">${avatarSrc ? `<img src="${esc(avatarSrc)}" alt="">` : esc(((st.name || "?")[0]).toUpperCase())}</span>
+        <span class="pp-avatar pg-avatar">${avatarSrc ? `<img src="${esc(avatarSrc)}" alt="" style="width:100%;height:100%;object-fit:cover;${fitStyle(meFit, 'avatar')}">` : esc(((st.name || "?")[0]).toUpperCase())}</span>
         <div class="pg-name">${esc(st.name || "—")}</div>
         <div style="position:relative;margin-top:4px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#93c5fd;font-weight:700;letter-spacing:.06em">
           ${esc(st.friendCode)} <button class="ol-btn alt mini" data-olf="copy" style="margin-left:6px;padding:2px 7px;font-size:10.5px">Copiar</button>
@@ -659,7 +664,7 @@ function profileView(p) {
 
   return `<div class="ol-card ol-view" style="width:100%;max-width:820px;margin:18px auto 0;padding:14px;border-radius:22px;box-shadow:0 24px 60px rgba(0,0,0,.45);border:1px solid rgba(190,214,255,.2);box-sizing:border-box">
     <div class="ol-hero">
-      ${bannerSrc ? `<img src="${bannerSrc}" alt="">` : ""}
+      ${bannerSrc ? `<img src="${bannerSrc}" alt="" style="${fitStyle(p, 'banner')}">` : ""}
       <div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(5,9,26,.75) 100%);pointer-events:none"></div>
       <button class="ol-btn mini alt ol-back" data-olf="back">← Volver</button>
     </div>
@@ -667,7 +672,7 @@ function profileView(p) {
     <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:0 18px;margin-top:-48px;position:relative;z-index:2">
       <div style="display:flex;align-items:flex-end;gap:16px;min-width:0;flex:1">
         <div class="ol-av">
-          ${avatarSrc ? `<img src="${avatarSrc}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : esc(((p.name || "?")[0]).toUpperCase())}
+          ${avatarSrc ? `<img src="${avatarSrc}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;${fitStyle(p, 'avatar')}">` : esc(((p.name || "?")[0]).toUpperCase())}
         </div>
         <div style="padding-bottom:6px;min-width:0;flex:1">
           <div class="ol-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
@@ -882,6 +887,7 @@ async function render(soft) {
         st.pDesc = (c && c.profile && c.profile.description) || "";
         st.localAvatar = (c && c.profile && c.profile.avatar) || "";
         st.localBanner = (c && c.profile && c.profile.banner) || "";
+        st.localFit = (c && c.profile && c.profile.fit) || null;
       } catch {}
       st.hours = hours; st.favs = favs.length; st.pName = pName;
       try { st.me = (await api.onlineView(myCode)) || null; if (st.me && st.me.email) st.email = st.me.email; } catch { st.me = null; }

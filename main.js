@@ -947,7 +947,7 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
     try {
       const p = profiles.current(), mine = onlineOwned();
       // the local name and pictures belong to the owning account too: a different one is never given them
-      return online.sync({ ...onlineSyncData(), ...(mine ? { name: p.name, avatar: p.avatar, banner: p.banner } : {}), playing });
+      return online.sync({ ...onlineSyncData(), ...(mine ? { name: p.name, avatar: p.avatar, banner: p.banner, fit: p.fit } : {}), playing });
     } catch (e) { log('online sync', e.message); }
   };
   // ---------- presence: "Jugando a…" on the server, with a slow heartbeat that also lands the hours there ----------
@@ -972,7 +972,7 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
       const newName = (res && res.name) || name;
       if (cur && cur.id && newName && !res.pendingVerification) {
         adoptAccountHistory(res.friendCode, prevCode, 0);
-        profiles.update(cur.id, { name: newName, description: '', avatar: '', banner: '' }); // a new account starts clean
+        profiles.update(cur.id, { name: newName, description: '', avatar: '', banner: '', fit: { avatar: { z: 1, x: 0, y: 0 }, banner: { z: 1, x: 0, y: 0 } } }); // a new account starts clean
       }
     } catch {}
     return res;
@@ -984,7 +984,7 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
       const cur = profiles.current();
       if (cur && cur.id && res && res.name) {
         adoptAccountHistory(res.friendCode, prevCode, 0);
-        profiles.update(cur.id, { name: res.name, description: '', avatar: '', banner: '' });
+        profiles.update(cur.id, { name: res.name, description: '', avatar: '', banner: '', fit: { avatar: { z: 1, x: 0, y: 0 }, banner: { z: 1, x: 0, y: 0 } } });
       }
     } catch {}
     return res;
@@ -1001,6 +1001,7 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
         // the hours are the account's: restore this account's own history (or keep it if it's the same 6 h), never inherit another's
         if (profileData) adoptAccountHistory(res.friendCode, prevCode, profileData.totalMs);
         const patch = { name: res.name, description: (profileData && profileData.description) || '', avatar: '', banner: '' };
+        if (profileData && profileData.fit && typeof profileData.fit === 'object') patch.fit = profileData.fit; // the framing saved from any PC
         if (profileData) {
           try { fs.mkdirSync(path.dirname(profiles.dataFile('avatar.jpg')), { recursive: true }); } catch {}
           const srv = online.server();

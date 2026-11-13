@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar      TEXT DEFAULT '',
   banner      TEXT DEFAULT '',
   favorites   TEXT DEFAULT '[]',         -- JSON: lista de ids favoritos
+  fit         TEXT DEFAULT '{}',         -- JSON: zoom/pan de la foto y el banner
   totalMs     INTEGER DEFAULT 0,
   passwordHash TEXT DEFAULT '',
   email       TEXT DEFAULT '',

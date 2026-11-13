@@ -175,7 +175,7 @@ function shrink(file, kind) {
     return { buf: im.toJPEG(85), type: 'image/jpeg' };
   } catch { return null; }
 }
-async function sync({ totalMs, favorites, name, playing, avatar, banner } = {}) {
+async function sync({ totalMs, favorites, name, playing, avatar, banner, fit } = {}) {
   const d = read();
   if (!d || !d.token) return { ok: false, registered: false };
   const patch = {};
@@ -183,6 +183,7 @@ async function sync({ totalMs, favorites, name, playing, avatar, banner } = {}) 
   const total = Math.max(0, Math.round(+totalMs) || 0);
   if (total > 0) patch.totalMs = total; // never push a 0 over the server's hours: an empty local read must not erase them
   if (name) patch.name = String(name).slice(0, 32);
+  if (fit && typeof fit === 'object') patch.fit = fit; // how the picture is cropped, so friends see the same framing
   if (playing != null) patch.playing = playing;
   const r = await call('/v1/me', { method: 'PUT', token: d.token, body: patch });
   if (r.ok) {

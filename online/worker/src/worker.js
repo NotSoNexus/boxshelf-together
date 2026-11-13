@@ -52,11 +52,23 @@ const hex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => x.toStr
 const sha256Hex = async v => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(v))))].map(x => x.toString(16).padStart(2, '0')).join('');
 const sha256Buf = async buf => [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(x => x.toString(16).padStart(2, '0')).join('');
 const parseArr = v => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+const parseObj = v => { try { const o = JSON.parse(v || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch { return {}; } };
+// how the picture sits in its circle / strip: zoom (1 = fills, 3 = 3×) and pan, capped by the zoom
+const cleanFit = v => {
+  const one = k => {
+    const f = (v && typeof v === 'object' && v[k] && typeof v[k] === 'object') ? v[k] : {};
+    const z = Math.min(3, Math.max(1, Math.round((+f.z || 1) * 100) / 100)), lim = (z - 1) * 50;
+    const clamp = n => Math.min(lim, Math.max(-lim, Math.round((+n || 0) * 100) / 100));
+    return { z, x: clamp(f.x), y: clamp(f.y) };
+  };
+  return { avatar: one('avatar'), banner: one('banner') };
+};
 // what anyone (the owner or a friend) may see about a profile: never the token hash or pending lists
 const rowToProfile = r => ({
   code: prettyCode(r.code), name: r.name, description: r.description || '',
   avatar: r.avatar || '', banner: r.banner || '',
   favorites: parseArr(r.favorites).length,
+  fit: parseObj(r.fit),
   totalMs: Math.max(0, +r.totalMs || 0), playing: clean(r.playing, 80) || null, createdAt: r.createdAt
 });
 const readJson = async req => { try { return await req.json(); } catch { boom('Cuerpo inválido.'); } };
@@ -289,6 +301,7 @@ async function route(req, env) {
   if (method === 'PUT' && p === '/v1/me') {
     const b = await readJson(req);
     let { name, description, totalMs, playing, favorites } = user;
+    let fit = user.fit || '{}';
     if (b.name != null) {
       name = clean(b.name, 32);
       if (name.length < 1) return failR('Escribe un nombre.');
@@ -299,8 +312,9 @@ async function route(req, env) {
     if (b.totalMs != null) totalMs = Math.max(0, Math.round(+b.totalMs) || 0);
     if (b.playing !== undefined) playing = clean(b.playing, 80) || '';
     if (Array.isArray(b.favorites)) favorites = JSON.stringify([...new Set(b.favorites.map(v => clean(v, 120)).filter(Boolean))].slice(0, 500));
-    await env.DB.prepare('UPDATE users SET name=?,name_lower=?,description=?,totalMs=?,playing=?,favorites=? WHERE code=?')
-      .bind(name, name.toLowerCase(), description, totalMs, playing, favorites, user.code).run();
+    if (b.fit != null && typeof b.fit === 'object') fit = JSON.stringify(cleanFit(b.fit));
+    await env.DB.prepare('UPDATE users SET name=?,name_lower=?,description=?,totalMs=?,playing=?,favorites=?,fit=? WHERE code=?')
+      .bind(name, name.toLowerCase(), description, totalMs, playing, favorites, fit, user.code).run();
     const fresh = await env.DB.prepare('SELECT * FROM users WHERE code=?').bind(user.code).first();
     return okR({ ...rowToProfile(fresh), favoritesList: parseArr(fresh.favorites) });
   }
