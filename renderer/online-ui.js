@@ -538,6 +538,63 @@ function animateIn() {
   el.querySelectorAll(".ol-card,.ol-sec,.ol-friend,.ol-pend,.ol-empty,.ol-loading").forEach(n => { n.classList.add("ol-in"); n.style.animationDelay = Math.min(i * 50, 420) + "ms"; i++; });
 }
 
+/* ---------- activity watcher & live polling ---------- */
+let livePollTimer = null;
+let bgPollTimer = null;
+let knownPlayingMap = new Map();
+let initialPollDone = false;
+
+function checkFriendActivity(friends) {
+  if (!Array.isArray(friends)) return;
+  for (const f of friends) {
+    if (!f || !f.code) continue;
+    const prevGame = knownPlayingMap.get(f.code);
+    if (initialPollDone && f.playing && f.playing !== prevGame) {
+      if (typeof window.toast === "function") {
+        window.toast(`🎮 ${f.name} ahora juega a ${f.playing}`);
+      }
+    }
+    knownPlayingMap.set(f.code, f.playing || null);
+  }
+  initialPollDone = true;
+}
+
+function startLivePoll() {
+  stopLivePoll();
+  livePollTimer = setInterval(async () => {
+    if (!el || !el.classList.contains("on") || isClosing || busy) return;
+    try {
+      if (mode === "home") {
+        const f = await api.onlineFriends();
+        if (f && Array.isArray(f.friends)) {
+          checkFriendActivity(f.friends);
+          await render(true);
+        }
+      } else if (mode === "view" && view) {
+        await render(true);
+      }
+    } catch {}
+  }, 9000);
+}
+
+function stopLivePoll() {
+  if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+}
+
+function startBgPresenceCheck() {
+  if (bgPollTimer) return;
+  bgPollTimer = setInterval(async () => {
+    if (el && el.classList.contains("on")) return;
+    try {
+      const st = await api.onlineStatus();
+      if (!st || !st.registered) return;
+      const f = await api.onlineFriends();
+      if (f && Array.isArray(f.friends)) checkFriendActivity(f.friends);
+    } catch {}
+  }, 45000);
+}
+setTimeout(startBgPresenceCheck, 8000);
+
 let myCode = "";
 async function render() {
   if (!el) return;
