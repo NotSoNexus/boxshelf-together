@@ -46,6 +46,10 @@ const boom = (msg, status = 400) => { const e = new Error(msg); e.status = statu
 
 /* ---------- small shared helpers, named like the app does it ---------- */
 const clean = (s, max) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, max);
+// anything a player typed (name, description) may end up in HTML: escape it once, here
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// inside meta attributes the ">" is harmless and Discord needs it literally (block quotes), so keep it
+const escAttr = s => String(s == null ? '' : s).replace(/[&"<]/g, c => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;' }[c]));
 const digits = s => String(s || '').replace(/\D/g, '');
 const prettyCode = d => (/^\d{12}$/.test(d) ? d.slice(0, 4) + '-' + d.slice(4, 8) + '-' + d.slice(8) : d);
 const hex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => x.toString(16).padStart(2, '0')).join('');
@@ -62,6 +66,11 @@ const cleanFit = v => {
     return { z, x: clamp(f.x), y: clamp(f.y) };
   };
   return { avatar: one('avatar'), banner: one('banner') };
+};
+// the same framing the app shows, applied to the web card
+const fitCss = (fit, k) => {
+  const f = cleanFit(fit)[k] || {};
+  return `transform:translate(${f.x}%,${f.y}%) scale(${f.z})`;
 };
 // what anyone (the owner or a friend) may see about a profile: never the token hash or pending lists
 const rowToProfile = r => ({
@@ -113,65 +122,99 @@ async function route(req, env) {
     const srv = url.origin;
     const avatarUrl = prof.avatar ? (prof.avatar.startsWith('http') ? prof.avatar : srv + prof.avatar) : '';
     const bannerUrl = prof.banner ? (prof.banner.startsWith('http') ? prof.banner : srv + prof.banner) : '';
-    const hours = Math.round((prof.totalMs || 0) / 3600000);
-    const desc = prof.description || `${hours} horas jugadas · ${prof.favorites} favoritos en Boxshelf Together`;
+    const ogImage = bannerUrl || avatarUrl;
+    const hRaw = (prof.totalMs || 0) / 36e5;
+    const hoursText = hRaw >= 100 ? Math.round(hRaw).toLocaleString('es-ES') : String(Math.round(hRaw * 10) / 10);
+    const playing = prof.playing ? clean(prof.playing, 80) : '';
+    const about = clean(prof.description || 'Jugador en Boxshelf Together', 160);
+    const canonical = `${srv}/u/${u.code}`;
     const boxshelfUri = `boxshelf://user/${u.code}`;
+    // The preview Discord shows: two tidy lines, the player's own text as a quote and the code as inline code.
+    const embedDesc = [
+      `🕹️ **${hoursText} h** jugadas  ·  ⭐ **${prof.favorites}** favoritos`,
+      about ? `> ${about}` : '',
+      playing ? `🎮 Jugando ahora: **${playing}**` : '',
+      '🆔 `' + prof.code + '`'
+    ].filter(Boolean).join('\n');
 
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>${clean(prof.name, 32)} en Boxshelf Together 🎮</title>
+  <title>${esc(prof.name)} en Boxshelf Together 🎮</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#4f83f4">
-  
-  <!-- Open Graph / Discord Embeds -->
+  <meta name="theme-color" content="#5b8dff">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="${escAttr(canonical)}">
+
+  <!-- Open Graph / Discord embed -->
   <meta property="og:type" content="profile">
   <meta property="og:site_name" content="Boxshelf Together">
-  <meta property="og:title" content="${clean(prof.name, 32)} (Código: ${prof.code})">
-  <meta property="og:description" content="${clean(desc, 180)}">
-  ${bannerUrl ? `<meta property="og:image" content="${bannerUrl}">` : avatarUrl ? `<meta property="og:image" content="${avatarUrl}">` : ''}
+  <meta property="og:url" content="${escAttr(canonical)}">
+  <meta property="og:title" content="${escAttr(prof.name)}">
+  <meta property="og:description" content="${escAttr(embedDesc)}">
+  <meta property="og:locale" content="es_ES">
+  ${ogImage ? `<meta property="og:image" content="${escAttr(ogImage)}">
+  <meta property="og:image:alt" content="Foto de perfil de ${escAttr(prof.name)}">` : ''}
   <meta name="twitter:card" content="summary_large_image">
-  
+  <meta name="twitter:title" content="${escAttr(prof.name)} en Boxshelf Together">
+  <meta name="twitter:description" content="${escAttr(embedDesc)}">
+  ${ogImage ? `<meta name="twitter:image" content="${escAttr(ogImage)}">` : ''}
+
   <style>
-    body { background: #050a1e; color: #eef3ff; font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-    .card { background: linear-gradient(165deg, rgba(44, 72, 150, 0.42), rgba(10, 16, 40, 0.85)); border: 1px solid rgba(190, 214, 255, 0.2); border-radius: 20px; max-width: 440px; width: 100%; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; }
-    .hero { height: 140px; background: #1e293b url('${bannerUrl}') center/cover; position: relative; }
-    .avatar { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #fff; position: relative; margin: -42px auto 0; background: #0f172a; object-fit: cover; box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; color: #fff; }
-    .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-    .content { padding: 18px 24px 30px; }
-    h1 { margin: 10px 0 4px; font-size: 24px; font-weight: 800; }
-    .code { font-family: monospace; color: #7dd3fc; font-weight: 700; letter-spacing: 1px; font-size: 14px; margin-bottom: 12px; }
-    .desc { font-size: 14px; color: #94a3b8; line-height: 1.4; margin-bottom: 20px; }
-    .stats { display: flex; justify-content: center; gap: 24px; margin-bottom: 24px; }
-    .stat b { display: block; font-size: 20px; color: #fff; }
-    .stat span { font-size: 12px; color: #64748b; }
-    .btn { display: inline-block; background: #3b82f6; color: #fff; text-decoration: none; font-weight: 700; padding: 14px 28px; border-radius: 12px; font-size: 15px; transition: 0.15s; box-shadow: 0 4px 15px rgba(59,130,246,0.4); }
-    .btn:hover { background: #2563eb; transform: translateY(-2px); }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #050a1e; color: #eaf1ff; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body::before { content: ""; position: fixed; inset: 0; z-index: -2; background: radial-gradient(60% 50% at 50% 0%, rgba(91,141,255,.30), transparent 70%), radial-gradient(45% 45% at 88% 100%, rgba(139,92,246,.20), transparent 72%), #050a1e; }
+    body::after { content: ""; position: fixed; inset: 0; z-index: -1; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 46px 46px; -webkit-mask-image: radial-gradient(70% 60% at 50% 40%, #000 15%, transparent 75%); mask-image: radial-gradient(70% 60% at 50% 40%, #000 15%, transparent 75%); }
+    .card { width: 100%; max-width: 460px; border-radius: 26px; overflow: hidden; position: relative; background: linear-gradient(180deg, rgba(22,32,64,.94), rgba(8,13,32,.97)); border: 1px solid rgba(150,180,255,.18); box-shadow: 0 30px 80px -20px rgba(0,0,0,.85), 0 0 0 1px rgba(255,255,255,.04) inset, 0 0 70px rgba(91,141,255,.14); }
+    .hero { height: 158px; position: relative; overflow: hidden; background: linear-gradient(135deg, #2a4fb8, #6d3fc4); }
+    .hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,9,26,.02), rgba(8,13,32,.55) 62%, rgba(8,13,32,.99)); }
+    .avatar-wrap { position: relative; width: 98px; height: 98px; margin: -51px auto 0; z-index: 2; }
+    .avatar { width: 98px; height: 98px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-size: 38px; font-weight: 800; color: #fff; background: linear-gradient(145deg, #75a4ff, #4735a7); box-shadow: 0 0 0 4px rgba(8,13,32,.96), 0 0 0 5.5px rgba(150,180,255,.34), 0 18px 40px rgba(0,0,0,.55); }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .dot { position: absolute; right: 3px; bottom: 3px; width: 19px; height: 19px; border-radius: 50%; background: #34d399; border: 3px solid #0b1126; box-shadow: 0 0 14px rgba(52,211,153,.85); }
+    .content { padding: 14px 26px 26px; text-align: center; }
+    h1 { margin: 10px 0 8px; font-size: 26px; line-height: 1.15; letter-spacing: -.02em; background: linear-gradient(180deg, #fff, #c3d5ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .code { display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px/1 ui-monospace, Consolas, monospace; letter-spacing: .14em; color: #9dc0ff; background: rgba(120,160,255,.09); border: 1px solid rgba(140,175,255,.2); padding: 8px 12px; border-radius: 999px; }
+    .live { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 5px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; color: #6ee7b7; background: rgba(52,211,153,.10); border: 1px solid rgba(52,211,153,.28); }
+    .desc { margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: #9fb0cf; min-height: 20px; }
+    .stats { display: flex; gap: 12px; margin: 20px 0 22px; }
+    .stat { flex: 1; padding: 13px 8px; border-radius: 16px; background: rgba(120,160,255,.07); border: 1px solid rgba(140,175,255,.14); }
+    .stat b { display: block; font-size: 21px; letter-spacing: -.02em; color: #fff; }
+    .stat span { display: block; margin-top: 4px; font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: #7d8fb3; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px; border-radius: 14px; background: linear-gradient(135deg, #5b8dff, #7b5bff); color: #fff; font-weight: 800; font-size: 14.5px; text-decoration: none; box-shadow: 0 12px 30px -6px rgba(91,141,255,.55), 0 0 0 1px rgba(255,255,255,.12) inset; transition: transform .16s ease, filter .16s ease; }
+    .btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
+    .foot { margin-top: 14px; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #55668a; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="hero"></div>
-    <div class="avatar">${avatarUrl ? `<img src="${avatarUrl}" alt="">` : (prof.name[0] || '?').toUpperCase()}</div>
+    <div class="hero">${bannerUrl ? `<img src="${esc(bannerUrl)}" alt="" style="${fitCss(prof.fit, 'banner')}">` : ''}</div>
+    <div class="avatar-wrap">
+      <div class="avatar">${avatarUrl ? `<img src="${esc(avatarUrl)}" alt="" style="${fitCss(prof.fit, 'avatar')}">` : esc((prof.name[0] || '?').toUpperCase())}</div>
+      ${playing ? '<span class="dot" title="Jugando ahora"></span>' : ''}
+    </div>
     <div class="content">
-      <h1>${clean(prof.name, 32)}</h1>
-      <div class="code">${prof.code}</div>
-      <div class="desc">${clean(prof.description || 'Jugador en Boxshelf Together', 160)}</div>
+      <h1>${esc(prof.name)}</h1>
+      <div class="code">🆔 ${esc(prof.code)}</div>
+      ${playing ? `<div class="live">🎮 Jugando ahora · ${esc(playing)}</div>` : ''}
+      <p class="desc">${esc(about)}</p>
       <div class="stats">
-        <div class="stat"><b>${hours} h</b><span>Tiempo jugado</span></div>
+        <div class="stat"><b>${esc(hoursText)} h</b><span>Tiempo jugado</span></div>
         <div class="stat"><b>${prof.favorites}</b><span>Favoritos</span></div>
       </div>
-      <a class="btn" href="${boxshelfUri}">Abrir en Boxshelf</a>
+      <a class="btn" href="${esc(boxshelfUri)}">Abrir en Boxshelf <span>→</span></a>
+      <div class="foot">Boxshelf Together</div>
     </div>
   </div>
   <script>
-    // Intentar abrir la app automáticamente
-    setTimeout(() => { window.location.href = "${boxshelfUri}"; }, 300);
+    // Intentar abrir la app automáticamente (la página queda visible si no está instalada)
+    setTimeout(() => { try { window.location.href = ${JSON.stringify(boxshelfUri)}; } catch (e) {} }, 700);
   </script>
 </body>
 </html>`;
-    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' } });
   }
 
   if (method === 'GET' && p.startsWith('/img/')) return serveImg(env, p.slice(5));
