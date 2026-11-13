@@ -951,14 +951,26 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
             if (profileData.avatar && typeof profileData.avatar === 'string') {
               const avUrl = profileData.avatar.startsWith('http') ? profileData.avatar : srv + profileData.avatar;
               const avDest = path.join(pDir, 'avatar.jpg');
-              const okAv = await covers.download(avUrl, avDest);
-              if (okAv && fs.existsSync(avDest)) patch.avatar = avDest;
+              try {
+                const r = await fetch(avUrl);
+                if (r.ok) {
+                  const buf = Buffer.from(await r.arrayBuffer());
+                  fs.writeFileSync(avDest, buf);
+                  patch.avatar = avDest;
+                }
+              } catch {}
             }
             if (profileData.banner && typeof profileData.banner === 'string') {
               const bnUrl = profileData.banner.startsWith('http') ? profileData.banner : srv + profileData.banner;
               const bnDest = path.join(pDir, 'banner.jpg');
-              const okBn = await covers.download(bnUrl, bnDest);
-              if (okBn && fs.existsSync(bnDest)) patch.banner = bnDest;
+              try {
+                const r = await fetch(bnUrl);
+                if (r.ok) {
+                  const buf = Buffer.from(await r.arrayBuffer());
+                  fs.writeFileSync(bnDest, buf);
+                  patch.banner = bnDest;
+                }
+              } catch {}
             }
           }
         } catch (errSync) {
