@@ -357,12 +357,12 @@ async function route(req, env) {
     const myFriends = parseArr(user.friends), tFriends = parseArr(target.friends);
     const drop = (arr, c) => arr.filter(x => x !== c);
     if (myFriends.includes(target.code)) return okR({ status: 'friends' });
-    if (parseArr(target.outgoing).includes(user.code)) { // both asked: friends at once
-      const myNew = { friends: [...myFriends, target.code], outgoing: drop(parseArr(user.outgoing), target.code) };
-      const tNew = { friends: [...tFriends, user.code], incoming: drop(parseArr(target.incoming), user.code) };
+    if (parseArr(target.outgoing).includes(user.code) || parseArr(user.outgoing).includes(target.code)) { // one asked, the other accepts (or both asked): friends at once
+      const myIn = drop(parseArr(user.incoming), target.code), myOut = drop(parseArr(user.outgoing), target.code);
+      const tIn = drop(parseArr(target.incoming), user.code), tOut = drop(parseArr(target.outgoing), user.code);
       await env.DB.batch([
-        env.DB.prepare('UPDATE users SET friends=?,outgoing=? WHERE code=?').bind(JSON.stringify(myNew.friends), JSON.stringify(myNew.outgoing), user.code),
-        env.DB.prepare('UPDATE users SET friends=?,incoming=? WHERE code=?').bind(JSON.stringify(tNew.friends), JSON.stringify(tNew.incoming), target.code)
+        env.DB.prepare('UPDATE users SET friends=?,incoming=?,outgoing=? WHERE code=?').bind(JSON.stringify([...new Set([...myFriends, target.code])]), JSON.stringify(myIn), JSON.stringify(myOut), user.code),
+        env.DB.prepare('UPDATE users SET friends=?,incoming=?,outgoing=? WHERE code=?').bind(JSON.stringify([...new Set([...tFriends, user.code])]), JSON.stringify(tIn), JSON.stringify(tOut), target.code)
       ]);
       return okR({ status: 'friends' });
     }
