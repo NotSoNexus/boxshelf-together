@@ -223,7 +223,28 @@ async function route(req, env) {
   const user = await me(req, env);
   if (!user) return failR('Sesión no válida. Vuelve a entrar con tu código de amigo.', 401);
 
-  if (method === 'GET' && p === '/v1/me') return okR({ ...rowToProfile(user), email: user.email || '', emailVerified: !!user.emailVerified, favoritesList: parseArr(user.favorites) });
+  if (method === 'GET' && p === '/v1/me') return okR({ ...rowToProfile(user), email: user.email || '', emailVerified: !!user.emailVerified, hasPassword: !!user.passwordHash, favoritesList: parseArr(user.favorites) });
+
+  if (method === 'POST' && p === '/v1/me/password') {
+    const b = await readJson(req);
+    const newPassword = String(b.newPassword || '').trim();
+    const currentPassword = String(b.currentPassword || '').trim();
+    if (newPassword.length < 4) return failR('La nueva contraseña debe tener al menos 4 caracteres.', 400);
+
+    if (user.passwordHash) {
+      if (!currentPassword) return failR('Escribe tu contraseña actual.', 400);
+      const currHash = await sha256Hex(currentPassword + ':' + user.code);
+      if (currHash !== user.passwordHash) return failR('La contraseña actual es incorrecta.', 401);
+    }
+
+    const newHash = await sha256Hex(newPassword + ':' + user.code);
+    try {
+      await env.DB.prepare('UPDATE users SET passwordHash=?, updatedAt=? WHERE code=?').bind(newHash, Date.now(), user.code).run();
+    } catch {
+      await env.DB.prepare('UPDATE users SET passwordHash=? WHERE code=?').bind(newHash, user.code).run();
+    }
+    return okR({ hasPassword: true });
+  }
 
   if (method === 'POST' && p === '/v1/me/link-email') {
     const b = await readJson(req);

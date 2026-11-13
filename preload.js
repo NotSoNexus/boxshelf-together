@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('boxshelf', {
   onlineLogout: () => call('online:logout'),
   onlineLinkEmail: email => call('online:linkEmail', { email: String(email || '') }),
   onlineConfirmEmail: (email, code) => call('online:confirmEmail', { email: String(email || ''), code: String(code || '') }),
+  onlineSetPassword: (newPassword, currentPassword) => call('online:setPassword', { newPassword: String(newPassword || ''), currentPassword: String(currentPassword || '') }),
   onlineSync: () => call('online:sync'),
   onlineUpload: (kind, data) => call('online:upload', { kind: String(kind || ''), data: data || {} }),
   onlineFriends: () => call('online:friends'),

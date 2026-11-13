@@ -12,7 +12,7 @@ const img = (u, srv) => { u = String(u || ""); if (!u) return ""; return /^https
 const digits = s => String(s || "").replace(/\D/g, "");
 const pretty = d => /^\d{12}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8) : "";
 
-let el = null, busy = false, mode = "home", view = null, focusEl = null, raf = 0, prev = {}, held = null, heldAt = 0, srv = "", returnTarget = "shelf", isClosing = false, authTab = "register", checkNameT = null, pendingEmail = "", regDraft = { name: "", email: "", pass: "" }, linkStep = 0, linkEmailDraft = "";
+let el = null, busy = false, mode = "home", homeTab = "friends", view = null, focusEl = null, raf = 0, prev = {}, held = null, heldAt = 0, srv = "", returnTarget = "shelf", isClosing = false, authTab = "register", checkNameT = null, pendingEmail = "", regDraft = { name: "", email: "", pass: "" }, linkStep = 0, linkEmailDraft = "", passStep = 0;
 
 /* ---------- screen ---------- */
 function ensure() {
@@ -221,6 +221,24 @@ function act() {
     render();
     return;
   }
+  if (f === "tab-home-friends") { homeTab = "friends"; render(); return; }
+  if (f === "tab-home-account") { homeTab = "account"; render(); return; }
+  if (f === "start-pass") { passStep = 1; render(); return; }
+  if (f === "cancel-pass") { passStep = 0; render(); return; }
+  if (f === "save-pass") {
+    const newEl = el.querySelector("#olNewPass"), confEl = el.querySelector("#olNewPassConfirm");
+    const currEl = el.querySelector("#olCurrPass");
+    const newP = newEl ? newEl.value.trim() : "", confP = confEl ? confEl.value.trim() : "";
+    const currP = currEl ? currEl.value.trim() : "";
+    if (newP.length < 4) { toast("La nueva contraseña debe tener al menos 4 caracteres."); return; }
+    if (newP !== confP) { toast("Las contraseñas no coinciden."); return; }
+    return run(async () => {
+      await api.onlineSetPassword(newP, currP);
+      passStep = 0;
+      await render();
+      return "¡Contraseña guardada correctamente!";
+    });
+  }
   if (f === "start-link") { linkStep = 1; render(); return; }
   if (f === "cancel-link") { linkStep = 0; linkEmailDraft = ""; render(); return; }
   if (f === "send-link-code") {
@@ -407,62 +425,157 @@ function pendingRow(p, kind) { // kind "in" = they asked you, "out" = you asked 
   </div>`;
 }
 
-function myCard(st) {
-  return `<div class="ol-card">
-    <div class="ol-me">${avatarHtml(st.me || {})}
-      <div style="min-width:0">
-        <div class="ol-name">${esc(st.name || "—")}</div>
-        <div class="ol-code"><b>${esc(st.friendCode)}</b><button class="ol-btn alt mini" data-olf="copy">Copiar</button></div>
+function accountView(st) {
+  return `<div class="ol-grid">
+    <div>
+      <div class="ol-card">
+        <span class="ol-lab">Tarjeta de Jugador</span>
+        <div class="ol-me" style="margin-top:12px">${avatarHtml(st.me || {})}
+          <div style="min-width:0">
+            <div class="ol-name">${esc(st.name || "—")}</div>
+            <div class="ol-code"><b>${esc(st.friendCode)}</b><button class="ol-btn alt mini" data-olf="copy">Copiar</button></div>
+          </div>
+        </div>
+        <div class="ol-stats">
+          <span class="ol-stat"><b>${fmt(st.hours)}</b>Horas jugadas</span>
+          <span class="ol-stat"><b>${st.favs}</b>Favoritos</span>
+          <span class="ol-stat"><b style="font-size:13px;margin-top:2px">${ago(st.lastSync)}</b>Última sincro</span>
+        </div>
+        <div class="ol-row" style="margin-top:16px">
+          <button class="ol-btn" data-olf="sync" ${busy ? "disabled" : ""}>Sincronizar ahora</button>
+          <button class="ol-btn alt" data-olf="avatar">Cambiar foto</button>
+          <button class="ol-btn alt" data-olf="banner">Cambiar banner</button>
+        </div>
+        <div class="ol-note" style="margin-top:12px">Tu perfil online se sincroniza automáticamente con tus juegos, favoritos y horas jugadas.</div>
       </div>
-    </div>
-    <div class="ol-stats">
-      <span class="ol-stat"><b>${fmt(st.hours)}</b>Horas jugadas</span>
-      <span class="ol-stat"><b>${st.favs}</b>Favoritos</span>
-      <span class="ol-stat"><b style="font-size:13px;margin-top:2px">${ago(st.lastSync)}</b>Última sincro</span>
     </div>
 
-    ${linkStep === 1 ? `
-      <div style="margin-top:14px;padding:12px;border:1px solid rgba(190,214,255,.24);border-radius:12px;background:rgba(5,9,26,.55)">
-        <span class="ol-lab">Vincular correo electrónico</span>
-        <div class="ol-note" style="margin-top:2px">Te enviaremos un código de 6 dígitos. Tus horas y amigos se conservan intactos.</div>
-        <input class="ol-input" id="olLinkEmailInput" type="email" placeholder="tu@correo.com" value="${esc(linkEmailDraft)}" style="margin-top:8px">
-        <div class="ol-row" style="margin-top:10px;gap:8px">
-          <button class="ol-btn mini" data-olf="send-link-code">Enviar código</button>
-          <button class="ol-btn alt mini" data-olf="cancel-link">Cancelar</button>
-        </div>
-      </div>
-    ` : linkStep === 2 ? `
-      <div style="margin-top:14px;padding:12px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(5,9,26,.55)">
-        <span class="ol-lab" style="color:#7dd3fc">Código enviado a ${esc(linkEmailDraft)}</span>
-        <input class="ol-input" id="olLinkVerifyInput" maxlength="6" inputmode="numeric" placeholder="000000" style="margin-top:8px;font-size:20px;letter-spacing:8px;text-align:center;font-weight:800;font-family:ui-monospace,Consolas,monospace">
-        <div class="ol-row" style="margin-top:10px;gap:8px">
-          <button class="ol-btn mini" data-olf="confirm-link-code">Confirmar</button>
-          <button class="ol-btn alt mini" data-olf="resend-link-code">Reenviar</button>
-          <button class="ol-btn alt mini" data-olf="cancel-link">Cancelar</button>
-        </div>
-      </div>
-    ` : `
-      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:8px 12px;border-radius:10px;background:rgba(8,13,34,.45);border:1px solid rgba(190,214,255,.12)">
-        <span style="font-size:14px">📧</span>
-        <span style="font-size:12px;color:rgba(198,214,255,.7)">Correo:</span>
-        ${st.email ? `
-          <b style="font-size:12.5px;color:#7dd3fc">${esc(st.email)}</b>
-          <span class="ol-tag" style="padding:2px 7px;font-size:10px;margin-left:2px">Verificado</span>
-          <button class="ol-btn alt mini" data-olf="start-link" style="margin-left:auto;padding:3px 8px;font-size:11px">Cambiar</button>
-        ` : `
-          <span style="font-size:12px;color:rgba(198,214,255,.45)">Sin correo vinculado</span>
-          <button class="ol-btn mini" data-olf="start-link" style="margin-left:auto;padding:4px 10px;font-size:11.5px">+ Vincular correo</button>
-        `}
-      </div>
-    `}
+    <div>
+      <div class="ol-card">
+        <span class="ol-lab">Seguridad y Acceso</span>
+        <div class="ol-note" style="margin-top:2px">Gestiona tus credenciales para acceder desde cualquier dispositivo sin perder tu progreso.</div>
 
-    <div class="ol-row" style="margin-top:14px">
-      <button class="ol-btn" data-olf="sync" ${busy ? "disabled" : ""}>Sincronizar ahora</button>
-      <button class="ol-btn alt" data-olf="avatar">Cambiar foto</button>
-      <button class="ol-btn alt" data-olf="banner">Cambiar banner</button>
-      <button class="ol-btn alt mini" data-olf="logout" style="margin-left:auto;color:#ff9e9e" title="Desvincular esta cuenta de este perfil local">Cerrar sesión</button>
+        <!-- CORREO ELECTRÓNICO -->
+        <div style="margin-top:14px;padding:12px;border:1px solid rgba(190,214,255,.16);border-radius:13px;background:rgba(5,9,26,.5)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span class="ol-lab" style="color:#9fb4e6">Correo Electrónico</span>
+            ${st.email ? `<span class="ol-tag" style="font-size:10px;padding:2px 8px">Verificado</span>` : `<span class="ol-tag wait" style="font-size:10px;padding:2px 8px">Sin vincular</span>`}
+          </div>
+
+          ${linkStep === 1 ? `
+            <div style="margin-top:10px">
+              <div class="ol-note">Te enviaremos un código de 6 dígitos a tu bandeja para confirmar la dirección.</div>
+              <input class="ol-input" id="olLinkEmailInput" type="email" placeholder="tu@correo.com" value="${esc(linkEmailDraft)}" style="margin-top:8px">
+              <div class="ol-row" style="margin-top:10px;gap:8px">
+                <button class="ol-btn mini" data-olf="send-link-code">Enviar código</button>
+                <button class="ol-btn alt mini" data-olf="cancel-link">Cancelar</button>
+              </div>
+            </div>
+          ` : linkStep === 2 ? `
+            <div style="margin-top:10px">
+              <div class="ol-note" style="color:#7dd3fc">Ingresa el código de 6 dígitos enviado a <b>${esc(linkEmailDraft)}</b>:</div>
+              <input class="ol-input" id="olLinkVerifyInput" maxlength="6" inputmode="numeric" placeholder="000000" style="margin-top:8px;font-size:20px;letter-spacing:8px;text-align:center;font-weight:800;font-family:ui-monospace,Consolas,monospace">
+              <div class="ol-row" style="margin-top:10px;gap:8px">
+                <button class="ol-btn mini" data-olf="confirm-link-code">Confirmar</button>
+                <button class="ol-btn alt mini" data-olf="resend-link-code">Reenviar código</button>
+                <button class="ol-btn alt mini" data-olf="cancel-link">Cancelar</button>
+              </div>
+            </div>
+          ` : `
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+              <span style="font-size:15px">📧</span>
+              <div style="flex:1;min-width:0">
+                ${st.email ? `<b style="font-size:13.5px;color:#7dd3fc">${esc(st.email)}</b>` : `<span style="font-size:12.5px;color:rgba(198,214,255,.5)">No tienes ningún correo vinculado.</span>`}
+              </div>
+              <button class="ol-btn alt mini" data-olf="start-link">${st.email ? "Cambiar correo" : "+ Vincular correo"}</button>
+            </div>
+          `}
+        </div>
+
+        <!-- CONTRASEÑA -->
+        <div style="margin-top:12px;padding:12px;border:1px solid rgba(190,214,255,.16);border-radius:13px;background:rgba(5,9,26,.5)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span class="ol-lab" style="color:#9fb4e6">Contraseña de la cuenta</span>
+            ${st.hasPassword ? `<span class="ol-tag" style="font-size:10px;padding:2px 8px">Activa</span>` : `<span class="ol-tag wait" style="font-size:10px;padding:2px 8px">Sin contraseña</span>`}
+          </div>
+
+          ${passStep === 1 ? `
+            <div style="margin-top:10px">
+              <div class="ol-note">${st.hasPassword ? "Escribe tu contraseña actual y la nueva que deseas usar." : "Crea una contraseña segura para entrar a tu cuenta desde cualquier PC."}</div>
+              ${st.hasPassword ? `
+                <input class="ol-input" id="olCurrPass" type="password" maxlength="64" placeholder="Contraseña actual" style="margin-top:8px">
+              ` : ""}
+              <input class="ol-input" id="olNewPass" type="password" maxlength="64" placeholder="Nueva contraseña (mínimo 4 caracteres)" style="margin-top:8px">
+              <input class="ol-input" id="olNewPassConfirm" type="password" maxlength="64" placeholder="Repite la nueva contraseña" style="margin-top:8px">
+              <div class="ol-row" style="margin-top:10px;gap:8px">
+                <button class="ol-btn mini" data-olf="save-pass">Guardar contraseña</button>
+                <button class="ol-btn alt mini" data-olf="cancel-pass">Cancelar</button>
+              </div>
+            </div>
+          ` : `
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+              <span style="font-size:15px">🔑</span>
+              <div style="flex:1;min-width:0">
+                ${st.hasPassword ? `
+                  <span style="font-size:12.5px;color:rgba(198,214,255,.8)">Contraseña configurada</span>
+                ` : `
+                  <span style="font-size:12px;color:#ffd178">No tienes contraseña. Agrega una para iniciar sesión en cualquier PC.</span>
+                `}
+              </div>
+              <button class="ol-btn ${st.hasPassword ? "alt" : ""} mini" data-olf="start-pass">${st.hasPassword ? "Cambiar contraseña" : "+ Establecer contraseña"}</button>
+            </div>
+          `}
+        </div>
+
+        <!-- CERRAR SESIÓN -->
+        <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;padding-top:12px;border-top:1px solid rgba(190,214,255,.1)">
+          <div class="ol-note" style="font-size:11.5px">Desvincular esta cuenta de este perfil local</div>
+          <button class="ol-btn alt mini" data-olf="logout" style="color:#ff9e9e">Cerrar sesión</button>
+        </div>
+      </div>
     </div>
-    <div class="ol-note" style="margin-top:12px">Tu código es tu identidad: dáselo a quien quieras agregar y agrega el suyo. Cuando los dos se agreguen, son amigos.</div>
+  </div>`;
+}
+
+function friendsView(st, lists) {
+  const F = lists.friends || [], I = lists.incoming || [], O = lists.outgoing || [];
+  return `<div class="ol-grid">
+    <div>
+      <div class="ol-card">
+        <span class="ol-lab">Tu código de amigo</span>
+        <div class="ol-code" style="margin-top:10px;font-size:16px">
+          <b>${esc(st.friendCode)}</b>
+          <button class="ol-btn alt mini" data-olf="copy">Copiar</button>
+        </div>
+        <div class="ol-note" style="margin-top:8px">Dáselo a un amigo para que te agregue. Cuando los dos se agreguen mutuamente, serán amigos.</div>
+      </div>
+
+      <div class="ol-card" style="margin-top:16px">
+        <span class="ol-lab">Agregar amigo por código</span>
+        <input class="ol-input" id="olCode" placeholder="0000-0000-0000" inputmode="numeric" maxlength="14">
+        <div class="ol-row" style="margin-top:10px">
+          <button class="ol-btn" data-olf="add" ${busy ? "disabled" : ""}>Enviar solicitud</button>
+        </div>
+      </div>
+
+      ${I.length ? `
+        <div class="ol-sec" style="margin-top:20px"><b>Solicitudes recibidas</b><span>toca para ver su perfil</span></div>
+        ${I.map(p => pendingRow(p, "in")).join("")}
+      ` : ""}
+
+      ${O.length ? `
+        <div class="ol-sec" style="margin-top:20px"><b>En espera</b><span>toca para ver su perfil</span></div>
+        ${O.map(p => pendingRow(p, "out")).join("")}
+      ` : ""}
+    </div>
+
+    <div>
+      <div class="ol-sec" style="margin-top:0"><b>Tus amigos</b><span>${F.length ? F.length + (F.length === 1 ? " amigo" : " amigos") : ""}</span></div>
+      ${lists.error ? `<div class="ol-card"><span class="ol-note">${esc(lists.error)}</span><div class="ol-row" style="margin-top:10px"><button class="ol-btn alt" data-olf="sync">Reintentar</button></div></div>`
+        : F.length ? F.map(p => friendRow(p, { remove: true })).join("")
+        : `<div class="ol-empty" style="padding:32px 16px"><div style="font-size:24px;margin-bottom:8px">🎮</div>Aún no tienes amigos agregados.<br><span style="font-size:11.5px;color:rgba(198,214,255,.5)">Comparte tu código o escribe el de un amigo a la izquierda para conectar.</span></div>`
+      }
+    </div>
   </div>`;
 }
 
@@ -556,21 +669,17 @@ function html(st, lists) {
     inner += lists.profile ? profileView(lists.profile)
       : `<div class="ol-card" style="margin-top:22px"><span class="ol-note">${esc(lists.verr || "No se pudo abrir el perfil.")}</span><div class="ol-row" style="margin-top:10px"><button class="ol-btn alt" data-olf="back">Volver</button></div></div>`;
   } else {
-    const F = lists.friends || [], I = lists.incoming || [], O = lists.outgoing || [];
-    inner += `<div class="ol-grid"><div>`;
-    inner += myCard(st);
-    inner += `</div><div>`;
-    if (lists.error) inner += `<div class="ol-card"><span class="ol-note">${esc(lists.error)}</span><div class="ol-row" style="margin-top:10px"><button class="ol-btn alt" data-olf="sync">Reintentar</button></div></div>`;
-    else {
-      inner += `<div class="ol-card"><span class="ol-lab">Agregar amigo por código</span>
-        <input class="ol-input" id="olCode" placeholder="0000-0000-0000" inputmode="numeric" maxlength="14">
-        <div class="ol-row" style="margin-top:10px"><button class="ol-btn" data-olf="add" ${busy ? "disabled" : ""}>Enviar solicitud</button></div></div>`;
-      inner += `<div class="ol-sec"><b>Tus amigos</b><span>${F.length ? F.length + (F.length === 1 ? " amigo" : " amigos") : ""}</span></div>`;
-      inner += F.length ? F.map(p => friendRow(p, { remove: true })).join("") : `<div class="ol-empty">Aún no tienes amigos. Agrega a alguien con su código arriba ↑</div>`;
-      if (I.length) inner += `<div class="ol-sec"><b>Solicitudes recibidas</b><span>toca la tarjeta para ver su perfil</span></div>` + I.map(p => pendingRow(p, "in")).join("");
-      if (O.length) inner += `<div class="ol-sec"><b>En espera</b><span>toca la tarjeta para ver su perfil</span></div>` + O.map(p => pendingRow(p, "out")).join("");
+    const F = lists.friends || [];
+    inner += `<div class="ol-tab-row" style="margin-top:16px;max-width:380px">
+      <button class="ol-tab-btn ${homeTab === 'friends' ? 'active' : ''}" data-olf="tab-home-friends">👥 Amigos ${F.length ? `(${F.length})` : ''}</button>
+      <button class="ol-tab-btn ${homeTab === 'account' ? 'active' : ''}" data-olf="tab-home-account">👤 Mi Perfil y Cuenta</button>
+    </div>`;
+
+    if (homeTab === "account") {
+      inner += accountView(st);
+    } else {
+      inner += friendsView(st, lists);
     }
-    inner += `</div></div>`;
   }
   inner += `<div class="ol-foot" style="margin-top:24px;text-align:center;font-size:11.5px;color:rgba(198,214,255,.55)">Servidor: ${esc(st.server || "—")}</div><div class="ol-toast" role="status"></div></div>`;
   return inner;

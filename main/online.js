@@ -49,9 +49,19 @@ async function call(pathname, { method = 'GET', token, body, raw } = {}) {
 
 const account = () => { const d = read(); return d && d.token ? d : null; };
 
-function status() {
+async function status() {
   const d = read();
-  return { server: server(), registered: !!(d && d.token), friendCode: d && d.code, name: d && d.name, email: (d && d.email) || '', lastSync: d && d.lastSync };
+  if (d && d.token && (d.hasPassword === undefined || d.email === undefined)) {
+    try {
+      const r = await call('/v1/me', { token: d.token });
+      if (r.ok && r.data) {
+        d.email = r.data.email || '';
+        d.hasPassword = !!r.data.hasPassword;
+        write(d);
+      }
+    } catch {}
+  }
+  return { server: server(), registered: !!(d && d.token), friendCode: d && d.code, name: d && d.name, email: (d && d.email) || '', hasPassword: !!(d && d.hasPassword), lastSync: d && d.lastSync };
 }
 function setServer(url) {
   url = String(url || '').trim().replace(/\/+$/, '');
@@ -114,6 +124,17 @@ async function confirmEmail(email, code) {
   d.email = r.data.email || email;
   write(d);
   return { ok: true, email: d.email };
+}
+async function setPassword(newPassword, currentPassword) {
+  const d = account(); if (!d) throw new Error('No tienes cuenta online.');
+  newPassword = String(newPassword || '').trim();
+  currentPassword = String(currentPassword || '').trim();
+  if (newPassword.length < 4) throw new Error('La contraseña debe tener al menos 4 caracteres.');
+  const r = await call('/v1/me/password', { method: 'POST', token: d.token, body: { newPassword, currentPassword } });
+  if (!r.ok) throw new Error(r.error || 'No se pudo actualizar la contraseña.');
+  d.hasPassword = true;
+  write(d);
+  return { ok: true, hasPassword: true };
 }
 async function login(identifier, password) {
   identifier = String(identifier || '').trim();
@@ -212,4 +233,4 @@ async function upload(kind, data) {
   if (!r.ok) throw new Error(r.error || 'No se pudo subir la imagen.');
   return r.data;
 }
-module.exports = { init, status, setServer, checkName, register, verifyEmail, resendCode, linkEmail, confirmEmail, login, logout, sync, friends, add, remove, view, upload, server };
+module.exports = { init, status, setServer, checkName, register, verifyEmail, resendCode, linkEmail, confirmEmail, setPassword, login, logout, sync, friends, add, remove, view, upload, server };

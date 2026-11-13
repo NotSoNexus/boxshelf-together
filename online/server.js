@@ -255,7 +255,25 @@ async function route(req, res) {
   const user = me(req);
   if (!user) return fail(res, 401, 'Sesión no válida. Vuelve a entrar con tu código de amigo.');
 
-  if (method === 'GET' && p === '/v1/me') return ok(res, { ...publicProfile(user), email: user.email || '', emailVerified: !!user.emailVerified, favoritesList: user.favorites || [] });
+  if (method === 'GET' && p === '/v1/me') return ok(res, { ...publicProfile(user), email: user.email || '', emailVerified: !!user.emailVerified, hasPassword: !!user.passwordHash, favoritesList: user.favorites || [] });
+
+  if (method === 'POST' && p === '/v1/me/password') {
+    let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
+    const newPassword = String(b.newPassword || '').trim();
+    const currentPassword = String(b.currentPassword || '').trim();
+    if (newPassword.length < 4) return fail(res, 400, 'La nueva contraseña debe tener al menos 4 caracteres.');
+
+    if (user.passwordHash) {
+      if (!currentPassword) return fail(res, 400, 'Escribe tu contraseña actual.');
+      const currHash = sha256(currentPassword + ':' + user.code);
+      if (currHash !== user.passwordHash) return fail(res, 401, 'La contraseña actual es incorrecta.');
+    }
+
+    user.passwordHash = sha256(newPassword + ':' + user.code);
+    user.updatedAt = Date.now();
+    save();
+    return ok(res, { hasPassword: true });
+  }
 
   if (method === 'POST' && p === '/v1/me/link-email') {
     let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
