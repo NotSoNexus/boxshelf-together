@@ -87,6 +87,49 @@ function registerAllowed(ip) {
   list.push(now); regHits.set(ip, list); return true;
 }
 
+/* ---------- email verification helper (Resend API or local simulation) ---------- */
+const pendingVerifications = new Map();
+function cleanExpiredVerifications() {
+  const now = Date.now();
+  for (const [key, v] of pendingVerifications.entries()) {
+    if (v.expiresAt < now) pendingVerifications.delete(key);
+  }
+}
+setInterval(cleanExpiredVerifications, 60000);
+
+async function sendVerificationEmail(email, code) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (apiKey) {
+    try {
+      const from = process.env.EMAIL_FROM || 'Boxshelf Together <onboarding@resend.dev>';
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from,
+          to: [email],
+          subject: `${code} es tu código de verificación - Boxshelf Together`,
+          html: `
+            <div style="background:#050a1e;color:#eef3ff;padding:32px;font-family:system-ui,-apple-system,sans-serif;border-radius:14px;max-width:480px;margin:0 auto;border:1px solid #1e293b;">
+              <h2 style="color:#60a5fa;margin-top:0;">Boxshelf Together 🎮</h2>
+              <p style="font-size:15px;color:#cbd5e1;">Tu código de verificación para activar tu cuenta es:</p>
+              <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;text-align:center;margin:24px 0;">
+                <span style="font-size:32px;font-weight:800;letter-spacing:8px;color:#38bdf8;font-family:monospace;">${code}</span>
+              </div>
+              <p style="font-size:13px;color:#94a3b8;margin-bottom:0;">Este código vence en 10 minutos. Si tú no solicitaste este código, puedes ignorar este mensaje.</p>
+            </div>`
+        })
+      });
+      if (r.ok) { console.log(`[email] Código enviado a ${email} vía Resend`); return true; }
+      else { const txt = await r.text(); console.warn(`[email] Error Resend: ${r.status} ${txt}`); }
+    } catch (e) { console.warn(`[email] Excepción correo: ${e.message}`); }
+  }
+  console.log(`\n======================================================`);
+  console.log(`[VERIFICACIÓN] Código para ${email}: >>> ${code} <<<`);
+  console.log(`======================================================\n`);
+  return true;
+}
+
 /* ---------- auth: the token is the account's key, only its hash is ever stored ---------- */
 function me(req) {
   const m = /^Bearer ([0-9a-f]{64})$/i.exec(req.headers.authorization || '');
@@ -123,21 +166,76 @@ async function route(req, res) {
     const password = String(b.password || '').trim();
     if (password.length < 4) return fail(res, 400, 'La contraseña debe tener al menos 4 caracteres.');
     if (Object.values(db.users).some(u => u.name.toLowerCase() === name.toLowerCase())) return fail(res, 409, 'Ya existe alguien con ese nombre. Elige otro.');
+    
+    const emailRaw = String(b.email || '').trim().toLowerCase();
+    if (emailRaw) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) return fail(res, 400, 'El formato del correo electrónico no es válido.');
+      if (Object.values(db.users).some(u => u.email_lower === emailRaw)) return fail(res, 409, 'Ese correo electrónico ya está registrado.');
+      const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+      pendingVerifications.set(emailRaw, { code: verifyCode, name, password, email: emailRaw, expiresAt: Date.now() + 600000 });
+      await sendVerificationEmail(emailRaw, verifyCode);
+      return ok(res, { pendingVerification: true, email: emailRaw });
+    }
+
+    // Registro directo sin correo
     const code = newCode(), token = crypto.randomBytes(32).toString('hex');
     const passwordHash = sha256(password + ':' + code);
-    db.users[code] = { code, name, passwordHash, description: '', avatar: '', banner: '', favorites: [], totalMs: 0, tokenHash: sha256(token), createdAt: Date.now(), updatedAt: Date.now(), friends: [], incoming: [], outgoing: [] };
+    db.users[code] = { code, name, email: '', email_lower: '', emailVerified: false, passwordHash, description: '', avatar: '', banner: '', favorites: [], totalMs: 0, tokenHash: sha256(token), createdAt: Date.now(), updatedAt: Date.now(), friends: [], incoming: [], outgoing: [] };
     save();
     console.log(`[register] ${prettyCode(code)} ${name} (ip ${ip})`);
     return ok(res, { friendCode: prettyCode(code), token, name });
   }
 
+  if (method === 'POST' && p === '/v1/verify-email') {
+    let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
+    const emailRaw = String(b.email || '').trim().toLowerCase();
+    const inputCode = String(b.code || '').replace(/\D/g, '');
+    const pending = pendingVerifications.get(emailRaw);
+    if (!pending) return fail(res, 400, 'No hay ninguna verificación pendiente para este correo o ya expiró.');
+    if (Date.now() > pending.expiresAt) {
+      pendingVerifications.delete(emailRaw);
+      return fail(res, 400, 'El código ha expirado. Solicita uno nuevo.');
+    }
+    if (inputCode !== pending.code) return fail(res, 400, 'Código de verificación incorrecto.');
+
+    pendingVerifications.delete(emailRaw);
+    const code = newCode(), token = crypto.randomBytes(32).toString('hex');
+    const passwordHash = sha256(pending.password + ':' + code);
+    db.users[code] = {
+      code, name: pending.name, email: pending.email, email_lower: pending.email, emailVerified: true,
+      passwordHash, description: '', avatar: '', banner: '', favorites: [], totalMs: 0,
+      tokenHash: sha256(token), createdAt: Date.now(), updatedAt: Date.now(),
+      friends: [], incoming: [], outgoing: []
+    };
+    save();
+    console.log(`[verify-email] ${prettyCode(code)} ${pending.name} (${pending.email})`);
+    return ok(res, { friendCode: prettyCode(code), token, name: pending.name, email: pending.email });
+  }
+
+  if (method === 'POST' && p === '/v1/resend-code') {
+    let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
+    const emailRaw = String(b.email || '').trim().toLowerCase();
+    const pending = pendingVerifications.get(emailRaw);
+    if (!pending) return fail(res, 400, 'No hay ninguna verificación pendiente para este correo.');
+    const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+    pending.code = verifyCode;
+    pending.expiresAt = Date.now() + 600000;
+    await sendVerificationEmail(emailRaw, verifyCode);
+    return ok(res, { sent: true });
+  }
+
   if (method === 'POST' && p === '/v1/login') {
     let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
-    const id = clean(b.identifier, 32);
+    const id = clean(b.identifier, 64);
     const password = String(b.password || '').trim();
-    if (!id || !password) return fail(res, 400, 'Escribe tu usuario y contraseña.');
+    if (!id || !password) return fail(res, 400, 'Escribe tu usuario, correo o código.');
     const idDigits = digits(id);
-    const target = Object.values(db.users).find(u => u.name.toLowerCase() === id.toLowerCase() || (idDigits.length === 12 && u.code === idDigits));
+    const idLower = id.toLowerCase();
+    const target = Object.values(db.users).find(u => 
+      u.name.toLowerCase() === idLower ||
+      (u.email_lower && u.email_lower === idLower) ||
+      (idDigits.length === 12 && u.code === idDigits)
+    );
     if (!target) return fail(res, 401, 'Usuario o contraseña incorrectos.');
     if (target.passwordHash) {
       if (sha256(password + ':' + target.code) !== target.passwordHash) {

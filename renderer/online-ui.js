@@ -12,7 +12,7 @@ const img = (u, srv) => { u = String(u || ""); if (!u) return ""; return /^https
 const digits = s => String(s || "").replace(/\D/g, "");
 const pretty = d => /^\d{12}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8) : "";
 
-let el = null, busy = false, mode = "home", view = null, focusEl = null, raf = 0, prev = {}, held = null, heldAt = 0, srv = "", returnTarget = "shelf", isClosing = false, authTab = "register", checkNameT = null;
+let el = null, busy = false, mode = "home", view = null, focusEl = null, raf = 0, prev = {}, held = null, heldAt = 0, srv = "", returnTarget = "shelf", isClosing = false, authTab = "register", checkNameT = null, pendingEmail = "", regDraft = { name: "", email: "", pass: "" };
 
 /* ---------- screen ---------- */
 function ensure() {
@@ -354,6 +354,7 @@ function myCard(st) {
       <button class="ol-btn" data-olf="sync" ${busy ? "disabled" : ""}>Sincronizar ahora</button>
       <button class="ol-btn alt" data-olf="avatar">Cambiar foto</button>
       <button class="ol-btn alt" data-olf="banner">Cambiar banner</button>
+      <button class="ol-btn alt mini" data-olf="logout" style="margin-left:auto;color:#ff9e9e" title="Desvincular esta cuenta de este perfil local">Cerrar sesión</button>
     </div>
     <div class="ol-note" style="margin-top:12px">Tu código es tu identidad: dáselo a quien quieras agregar y agrega el suyo. Cuando los dos se agreguen, son amigos.</div>
   </div>`;
@@ -381,13 +382,62 @@ function html(st, lists) {
     <button class="ol-x" data-olf="close" title="Cerrar (B)">✕</button></div>`;
 
   if (!st.registered) {
-    inner += `<div class="ol-card ol-create">
-      <span class="ol-lab" style="font-size:12px">Crea tu cuenta</span>
-      <div class="ol-note" style="margin-top:8px">Sin correo ni contraseña: un nombre, un código de amigo y una llave que vive en este perfil de jugador. Nada sale de aquí sin tu permiso.</div>
-      <span class="ol-lab" style="display:block;margin-top:16px">Tu nombre</span>
-      <input class="ol-input" id="olName" maxlength="32" placeholder="Como te verán tus amigos" value="${esc(st.pName || "")}">
-      <div class="ol-row" style="margin-top:14px"><button class="ol-btn" data-olf="create" ${busy ? "disabled" : ""} style="padding:12px 20px">Crear mi cuenta</button></div>
-    </div>`;
+    if (pendingEmail) {
+      inner += `<div class="ol-card ol-create" style="max-width:520px;margin:22px auto 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span style="font-size:26px">📬</span>
+          <div>
+            <h2 style="font-size:18px;font-weight:800;margin:0">Confirma tu correo</h2>
+            <div class="ol-note" style="margin-top:3px">Te enviamos un código de 6 dígitos a <b style="color:#7dd3fc">${esc(pendingEmail)}</b>.</div>
+          </div>
+        </div>
+
+        <span class="ol-lab" style="margin-top:16px">Código de 6 dígitos</span>
+        <input class="ol-input" id="olVerifyCode" maxlength="6" inputmode="numeric" placeholder="000000" style="font-size:24px;letter-spacing:10px;text-align:center;font-weight:800;font-family:ui-monospace,Consolas,monospace">
+
+        <div class="ol-row" style="margin-top:20px;gap:10px">
+          <button class="ol-btn" data-olf="verify" ${busy ? "disabled" : ""} style="padding:12px 24px">Verificar y Activar</button>
+          <button class="ol-btn alt" data-olf="resend" ${busy ? "disabled" : ""}>Reenviar código</button>
+          <button class="ol-btn alt" data-olf="cancel-verify" style="margin-left:auto">← Volver</button>
+        </div>
+      </div>`;
+    } else {
+      inner += `<div class="ol-card ol-create" style="max-width:540px;margin:22px auto 0">
+        <div class="ol-tab-row">
+          <button class="ol-tab-btn ${authTab === "register" ? "active" : ""}" data-olf="tab-reg">Crear cuenta</button>
+          <button class="ol-tab-btn ${authTab === "login" ? "active" : ""}" data-olf="tab-login">Iniciar sesión</button>
+        </div>
+        ${authTab === "register" ? `
+          <div class="ol-note" style="margin-bottom:14px">Únete a Boxshelf Together con tu nombre único para jugar con amigos.</div>
+          
+          <span class="ol-lab">Nombre de usuario</span>
+          <input class="ol-input" id="olRegName" maxlength="32" placeholder="Como te verán tus amigos (mínimo 3 letras)" value="${esc(regDraft.name || st.pName || "")}">
+          <div class="ol-name-status info" id="olNameStatus">Elige un nombre para identificarte</div>
+
+          <span class="ol-lab" style="margin-top:14px">Correo electrónico <span style="font-size:10.5px;color:rgba(198,214,255,.5);font-weight:500">(opcional, para confirmar tu cuenta)</span></span>
+          <input class="ol-input" id="olRegEmail" type="email" maxlength="64" placeholder="tu@correo.com (recibirás un código de 6 dígitos)" value="${esc(regDraft.email || "")}">
+
+          <span class="ol-lab" style="margin-top:14px">Contraseña</span>
+          <input class="ol-input" id="olRegPass" type="password" maxlength="64" placeholder="Mínimo 4 caracteres (para entrar desde otra PC)" value="${esc(regDraft.pass || "")}">
+
+          <div class="ol-row" style="margin-top:22px">
+            <button class="ol-btn" data-olf="create" ${busy ? "disabled" : ""} style="padding:12px 26px">Crear mi cuenta</button>
+          </div>
+        ` : `
+          <div class="ol-note" style="margin-bottom:14px">¿Ya tienes cuenta? Inicia sesión con tu correo, usuario o código de amigo.</div>
+          
+          <span class="ol-lab">Correo, Usuario o Código de amigo</span>
+          <input class="ol-input" id="olLoginId" maxlength="64" placeholder="ejemplo@correo.com o tu usuario">
+
+          <span class="ol-lab" style="margin-top:14px">Contraseña</span>
+          <input class="ol-input" id="olLoginPass" type="password" maxlength="64" placeholder="Tu contraseña">
+
+          <div class="ol-row" style="margin-top:22px">
+            <button class="ol-btn" data-olf="login" ${busy ? "disabled" : ""} style="padding:12px 26px">Iniciar sesión</button>
+          </div>
+        `}
+      </div>`;
+    }
   } else if (mode === "view") {
     inner += lists.profile ? profileView(lists.profile)
       : `<div class="ol-card" style="margin-top:22px"><span class="ol-note">${esc(lists.verr || "No se pudo abrir el perfil.")}</span><div class="ol-row" style="margin-top:10px"><button class="ol-btn alt" data-olf="back">Volver</button></div></div>`;

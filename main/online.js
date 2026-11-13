@@ -60,12 +60,62 @@ function setServer(url) {
   write({ ...d, server: url || '' });
   return status();
 }
-async function register(name) {
+async function checkName(name) {
   name = String(name || '').trim().slice(0, 32);
-  if (!name) throw new Error('Escribe un nombre.');
-  const r = await call('/v1/register', { method: 'POST', body: { name } });
+  if (name.length < 3) return { ok: true, available: false, reason: 'Mínimo 3 caracteres' };
+  const r = await call('/v1/check-name?name=' + encodeURIComponent(name));
+  if (!r.ok) return { ok: false, error: r.error };
+  return { ok: true, available: !!r.data.available };
+}
+async function register(name, password, email) {
+  name = String(name || '').trim().slice(0, 32);
+  password = String(password || '').trim();
+  email = String(email || '').trim().toLowerCase();
+  if (name.length < 3) throw new Error('El nombre debe tener al menos 3 caracteres.');
+  if (password.length < 4) throw new Error('La contraseña debe tener al menos 4 caracteres.');
+  const r = await call('/v1/register', { method: 'POST', body: { name, password, email: email || undefined } });
   if (!r.ok) throw new Error(r.error || 'No se pudo crear la cuenta.');
-  write({ ...(read() || {}), token: r.data.token, code: r.data.friendCode, name, lastSync: 0 });
+  if (r.data && r.data.pendingVerification) {
+    return { pendingVerification: true, email: r.data.email };
+  }
+  write({ ...(read() || {}), token: r.data.token, code: r.data.friendCode, name: r.data.name || name, email: email || '', lastSync: 0 });
+  return status();
+}
+async function verifyEmail(email, code) {
+  email = String(email || '').trim().toLowerCase();
+  code = String(code || '').trim().replace(/\D/g, '');
+  if (!email) throw new Error('Correo no especificado.');
+  if (code.length !== 6) throw new Error('El código debe tener 6 dígitos.');
+  const r = await call('/v1/verify-email', { method: 'POST', body: { email, code } });
+  if (!r.ok) throw new Error(r.error || 'Código incorrecto o expirado.');
+  write({ ...(read() || {}), token: r.data.token, code: r.data.friendCode, name: r.data.name, email: r.data.email || email, lastSync: 0 });
+  return status();
+}
+async function resendCode(email) {
+  email = String(email || '').trim().toLowerCase();
+  if (!email) throw new Error('Correo no especificado.');
+  const r = await call('/v1/resend-code', { method: 'POST', body: { email } });
+  if (!r.ok) throw new Error(r.error || 'No se pudo reenviar el código.');
+  return { sent: true };
+}
+async function login(identifier, password) {
+  identifier = String(identifier || '').trim();
+  password = String(password || '').trim();
+  if (!identifier) throw new Error('Escribe tu usuario, correo o código.');
+  if (!password) throw new Error('Escribe tu contraseña.');
+  const r = await call('/v1/login', { method: 'POST', body: { identifier, password } });
+  if (!r.ok) throw new Error(r.error || 'Usuario o contraseña incorrectos.');
+  write({ ...(read() || {}), token: r.data.token, code: r.data.friendCode, name: r.data.name, lastSync: 0 });
+  return status();
+}
+function logout() {
+  const d = read() || {};
+  delete d.token;
+  delete d.code;
+  delete d.name;
+  delete d.lastSync;
+  delete d.email;
+  write(d);
   return status();
 }
 // the account follows the player profile: rename it here and the server follows on the next sync.
@@ -145,4 +195,4 @@ async function upload(kind, data) {
   if (!r.ok) throw new Error(r.error || 'No se pudo subir la imagen.');
   return r.data;
 }
-module.exports = { init, status, setServer, checkName, register, login, logout, sync, friends, add, remove, view, upload, server };
+module.exports = { init, status, setServer, checkName, register, verifyEmail, resendCode, login, logout, sync, friends, add, remove, view, upload, server };
