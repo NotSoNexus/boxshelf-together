@@ -178,7 +178,9 @@ function shrink(file, kind) {
 async function sync({ totalMs, favorites, name, playing, avatar, banner } = {}) {
   const d = read();
   if (!d || !d.token) return { ok: false, registered: false };
-  const patch = { totalMs: Math.max(0, Math.round(+totalMs) || 0), favorites: Array.isArray(favorites) ? favorites.slice(0, 500) : [] };
+  const patch = { favorites: Array.isArray(favorites) ? favorites.slice(0, 500) : [] };
+  const total = Math.max(0, Math.round(+totalMs) || 0);
+  if (total > 0) patch.totalMs = total; // never push a 0 over the server's hours: an empty local read must not erase them
   if (name) patch.name = String(name).slice(0, 32);
   if (playing != null) patch.playing = playing;
   const r = await call('/v1/me', { method: 'PUT', token: d.token, body: patch });

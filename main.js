@@ -909,6 +909,17 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
   // ---------- Boxshelf Online (perfiles y amigos; el internet va solo por aquí, la página no habla https) ----------
   online.init(profiles, config, log);
   const onlineSyncData = () => { let totalMs = 0; try { for (const v of Object.values(loadHistory())) totalMs += Math.max(0, +v.ms || 0); } catch {} return { totalMs, favorites: (cfg.ui && cfg.ui.favorites) || [] }; };
+  // ---------- presence: "Jugando a…" on the server, with a slow heartbeat that also lands the hours there ----------
+  let onlinePresenceTimer = null, onlinePresence = null;
+  function setOnlinePresence(playing) {
+    playing = String(playing || '').slice(0, 120);
+    if (onlinePresence === playing) return;
+    onlinePresence = playing;
+    const send = () => { try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner, playing }); } catch (e) { log('online presence', e.message); } };
+    clearInterval(onlinePresenceTimer); onlinePresenceTimer = null;
+    send();
+    if (playing) onlinePresenceTimer = setInterval(send, 120000); // 2 min: fresh presence without hammering the server
+  }
   handle('online:status', () => online.status());
   handle('online:setServer', ({ url }) => online.setServer(url));
   handle('online:checkName', ({ name }) => online.checkName(name));
@@ -941,11 +952,12 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
       if (cur && cur.id && res && res.name) {
         const patch = { name: res.name };
         // Si el usuario en el servidor tiene avatar o banner, descargarlos a la carpeta del perfil local
+        let profileData = null;
         try {
-          const profileData = await online.view(res.friendCode);
+          profileData = await online.view(res.friendCode);
           if (profileData) {
             if (profileData.description) patch.description = profileData.description;
-            const pDir = path.join(paths.dataDir(), 'profiles', cur.id);
+            const pDir = path.dirname(profiles.dataFile('avatar.jpg'));
             fs.mkdirSync(pDir, { recursive: true });
             const srv = online.server();
             if (profileData.avatar && typeof profileData.avatar === 'string') {
@@ -977,6 +989,17 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
           log('online login sync error', errSync.message);
         }
         profiles.update(cur.id, patch);
+        // the hours belong to the profile: keep the local per-game history, but read it fresh (the cache may be from another
+        // profile) and, if this profile has no history yet, bring the server's total back so nothing looks lost
+        history = null;
+        try {
+          const h = loadHistory();
+          if (!Object.keys(h).length && profileData && +profileData.totalMs > 0) {
+            h['online:total'] = { count: 1, ms: Math.max(0, Math.round(+profileData.totalMs)), last: Date.now() };
+            saveHistory();
+          }
+        } catch (e) { log('online login history', e.message); }
+        if (alive()) win.webContents.send('history:changed', { login: 1 });
       }
     } catch {}
     return res;
@@ -1012,6 +1035,7 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
   handle('online:setPassword', ({ newPassword, currentPassword }) => online.setPassword(newPassword, currentPassword));
   handle('online:sync', () => {
     history = null; // forzar recarga fresca de history.json desde el disco
+    if (alive()) win.webContents.send('history:changed', { sync: 1 }); // the shelf's hours are read again too
     const p = profiles.current();
     return online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner });
   });
