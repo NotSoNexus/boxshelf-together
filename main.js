@@ -965,16 +965,6 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
           fit: { avatar: { z: 1, x: 0, y: 0 }, banner: { z: 1, x: 0, y: 0 } }
         });
       }
-      // Limpiar todo el historial de tiempo jugado de este perfil local
-      try {
-        const h = loadHistory();
-        if (h && typeof h === 'object') {
-          for (const k of Object.keys(h)) delete h[k];
-          saveHistory();
-        }
-      } catch (err) {
-        log('logout clear history error', err.message);
-      }
     } catch (e) {
       log('logout clear profile', e.message);
     }
