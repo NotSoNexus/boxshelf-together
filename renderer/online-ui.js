@@ -499,6 +499,8 @@ function accountView(st) {
   const bannerSrc = localUrl(st.localBanner || (st.me && st.me.banner));
   const avatarSrc = localUrl(st.localAvatar || (st.me && st.me.avatar));
   const desc = (st.me && st.me.description) || st.pDesc || "Tu perfil de Boxshelf Together";
+  const displayHours = (st.me && st.me.totalMs > 0) ? st.me.totalMs : (st.hours || 0);
+  const displayFavs = (st.me && Array.isArray(st.me.favorites) && st.me.favorites.length) ? st.me.favorites.length : (st.favs || 0);
 
   return `<div class="ol-grid">
     <div>
@@ -512,8 +514,8 @@ function accountView(st) {
         </div>
         <div class="pg-desc" style="margin-top:14px">${esc(desc)}</div>
         <div class="pg-stats" style="margin-top:15px">
-          <span><b>${st.favs || 0}</b>Favoritos</span>
-          <span><b>${fmt(st.hours)}</b>Tiempo jugado</span>
+          <span><b>${displayFavs}</b>Favoritos</span>
+          <span><b>${fmt(displayHours)}</b>Tiempo jugado</span>
         </div>
         <div class="ol-row" style="position:relative;margin-top:20px;gap:8px">
           <button class="ol-btn mini" data-olf="sync" ${busy ? "disabled" : ""}>Sincronizar ahora</button>
