@@ -915,13 +915,23 @@ handle('clipboard:text', () => { const { clipboard } = require('electron'); retu
     const res = await online.register(name, password, email);
     try {
       const cur = profiles.current();
+      const newName = (res && res.name) || name;
+      if (cur && cur.id && newName && !res.pendingVerification) {
+        profiles.update(cur.id, { name: newName });
+      }
+    } catch {}
+    return res;
+  });
+  handle('online:verifyEmail', async ({ email, code }) => {
+    const res = await online.verifyEmail(email, code);
+    try {
+      const cur = profiles.current();
       if (cur && cur.id && res && res.name) {
         profiles.update(cur.id, { name: res.name });
       }
     } catch {}
     return res;
   });
-  handle('online:verifyEmail', ({ email, code }) => online.verifyEmail(email, code));
   handle('online:resendCode', ({ email }) => online.resendCode(email));
   handle('online:login', async ({ identifier, password }) => {
     const res = await online.login(identifier, password);

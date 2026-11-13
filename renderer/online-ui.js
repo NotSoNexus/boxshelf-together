@@ -203,6 +203,9 @@ function act() {
         return "Código enviado a " + pendingEmail;
       }
       await api.onlineSync();
+      if (window.Shelf && Shelf.refresh) {
+        try { await Shelf.refresh(true); } catch {}
+      }
     }, "¡Cuenta creada! Ya estás en Boxshelf Together.");
   }
   if (f === "confirm-reg-code" || f === "verify") {
@@ -214,6 +217,9 @@ function act() {
       authTab = "register";
       pendingEmail = "";
       await api.onlineSync();
+      if (window.Shelf && Shelf.refresh) {
+        try { await Shelf.refresh(true); } catch {}
+      }
       await render();
       return "¡Cuenta verificada y creada con éxito!";
     });
@@ -302,6 +308,9 @@ function act() {
     return run(async () => {
       const res = await api.onlineLogin(id, pass);
       await api.onlineSync();
+      if (window.Shelf && Shelf.refresh) {
+        try { await Shelf.refresh(true); } catch {}
+      }
       return "¡Sesión iniciada! Bienvenido, " + (res.name || id);
     }, "¡Sesión iniciada!");
   }
@@ -486,8 +495,6 @@ function accountView(st) {
         </div>
         <div class="ol-row" style="position:relative;margin-top:20px;gap:8px">
           <button class="ol-btn mini" data-olf="sync" ${busy ? "disabled" : ""}>Sincronizar ahora</button>
-          <button class="ol-btn alt mini" data-olf="avatar">Cambiar foto</button>
-          <button class="ol-btn alt mini" data-olf="banner">Cambiar banner</button>
         </div>
       </div>
     </div>
