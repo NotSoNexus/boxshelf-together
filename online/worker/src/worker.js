@@ -94,6 +94,86 @@ async function route(req, env) {
 
   if (method === 'GET' && (p === '/v1/ping' || p === '/')) return okR({ pong: true, service: 'boxshelf-online', version: 1 });
 
+  // Web / Discord preview & deep link: /u/<code_or_name>
+  if (method === 'GET' && p.startsWith('/u/')) {
+    const rawTarget = p.slice(3);
+    const targetDigits = digits(rawTarget);
+    let u = null;
+    if (targetDigits.length === 12) {
+      u = await env.DB.prepare('SELECT * FROM users WHERE code=?').bind(targetDigits).first();
+    }
+    if (!u) {
+      u = await env.DB.prepare('SELECT * FROM users WHERE name_lower=?').bind(decodeURIComponent(rawTarget).toLowerCase()).first();
+    }
+    if (!u) {
+      return new Response('<html><body style="background:#050a1e;color:#fff;font-family:sans-serif;text-align:center;padding:50px"><h2>Usuario no encontrado en Boxshelf Together</h2></body></html>', { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
+
+    const prof = rowToProfile(u);
+    const srv = url.origin;
+    const avatarUrl = prof.avatar ? (prof.avatar.startsWith('http') ? prof.avatar : srv + prof.avatar) : '';
+    const bannerUrl = prof.banner ? (prof.banner.startsWith('http') ? prof.banner : srv + prof.banner) : '';
+    const hours = Math.round((prof.totalMs || 0) / 3600000);
+    const desc = prof.description || `${hours} horas jugadas · ${prof.favorites} favoritos en Boxshelf Together`;
+    const boxshelfUri = `boxshelf://user/${u.code}`;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>${clean(prof.name, 32)} en Boxshelf Together 🎮</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#4f83f4">
+  
+  <!-- Open Graph / Discord Embeds -->
+  <meta property="og:type" content="profile">
+  <meta property="og:site_name" content="Boxshelf Together">
+  <meta property="og:title" content="${clean(prof.name, 32)} (Código: ${prof.code})">
+  <meta property="og:description" content="${clean(desc, 180)}">
+  ${bannerUrl ? `<meta property="og:image" content="${bannerUrl}">` : avatarUrl ? `<meta property="og:image" content="${avatarUrl}">` : ''}
+  <meta name="twitter:card" content="summary_large_image">
+  
+  <style>
+    body { background: #050a1e; color: #eef3ff; font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+    .card { background: linear-gradient(165deg, rgba(44, 72, 150, 0.42), rgba(10, 16, 40, 0.85)); border: 1px solid rgba(190, 214, 255, 0.2); border-radius: 20px; max-width: 440px; width: 100%; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; }
+    .hero { height: 140px; background: #1e293b url('${bannerUrl}') center/cover; position: relative; }
+    .avatar { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #fff; position: relative; margin: -42px auto 0; background: #0f172a; object-fit: cover; box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; color: #fff; }
+    .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+    .content { padding: 18px 24px 30px; }
+    h1 { margin: 10px 0 4px; font-size: 24px; font-weight: 800; }
+    .code { font-family: monospace; color: #7dd3fc; font-weight: 700; letter-spacing: 1px; font-size: 14px; margin-bottom: 12px; }
+    .desc { font-size: 14px; color: #94a3b8; line-height: 1.4; margin-bottom: 20px; }
+    .stats { display: flex; justify-content: center; gap: 24px; margin-bottom: 24px; }
+    .stat b { display: block; font-size: 20px; color: #fff; }
+    .stat span { font-size: 12px; color: #64748b; }
+    .btn { display: inline-block; background: #3b82f6; color: #fff; text-decoration: none; font-weight: 700; padding: 14px 28px; border-radius: 12px; font-size: 15px; transition: 0.15s; box-shadow: 0 4px 15px rgba(59,130,246,0.4); }
+    .btn:hover { background: #2563eb; transform: translateY(-2px); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="hero"></div>
+    <div class="avatar">${avatarUrl ? `<img src="${avatarUrl}" alt="">` : (prof.name[0] || '?').toUpperCase()}</div>
+    <div class="content">
+      <h1>${clean(prof.name, 32)}</h1>
+      <div class="code">${prof.code}</div>
+      <div class="desc">${clean(prof.description || 'Jugador en Boxshelf Together', 160)}</div>
+      <div class="stats">
+        <div class="stat"><b>${hours} h</b><span>Tiempo jugado</span></div>
+        <div class="stat"><b>${prof.favorites}</b><span>Favoritos</span></div>
+      </div>
+      <a class="btn" href="${boxshelfUri}">Abrir en Boxshelf</a>
+    </div>
+  </div>
+  <script>
+    // Intentar abrir la app automáticamente
+    setTimeout(() => { window.location.href = "${boxshelfUri}"; }, 300);
+  </script>
+</body>
+</html>`;
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
   if (method === 'GET' && p.startsWith('/img/')) return serveImg(env, p.slice(5));
 
   if (method === 'GET' && p === '/v1/check-name') {

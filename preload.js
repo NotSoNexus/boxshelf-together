@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('boxshelf', {
   onlineFriendAdd: code => call('online:friendAdd', { code: String(code || '') }),
   onlineFriendRemove: code => call('online:friendRemove', { code: String(code || '') }),
   onlineView: code => call('online:view', { code: String(code || '') }),
+  onOpenUser: fn => ipcRenderer.on('online:openUser', (e, d) => fn(d)),
   openExternal: url => call('app:openExternal', { url }),
   updateCheck: force => call('app:updateCheck', { force: !!force }), // (1.82) { current, latest, newer, url, links } or { error }
   onUpdate: cb => ipcRenderer.on('app:update', (_e, r) => cb(r)),

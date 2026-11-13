@@ -205,6 +205,21 @@ function act() {
     }
     return;
   }
+  if (f === "share-link") {
+    const srvUrl = srv || "https://boxshelf-online.boxshelf-justniko.workers.dev";
+    const shareUrl = `${srvUrl.replace(/\/+$/, '')}/u/${encodeURIComponent(myCode || digits(myCode))}`;
+    try {
+      if (api.clipboardWrite) {
+        api.clipboardWrite(shareUrl);
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl);
+      }
+      toast("Enlace copiado para Discord o navegador 🎮", true);
+    } catch {
+      toast("No se pudo copiar el enlace.");
+    }
+    return;
+  }
   if (f === "tab-reg") { authTab = "register"; render(); return; }
   if (f === "tab-login") { authTab = "login"; render(); return; }
   if (f === "create") {
@@ -516,6 +531,7 @@ function accountView(st) {
         <div class="pg-name">${esc(st.name || "—")}</div>
         <div style="position:relative;margin-top:4px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#93c5fd;font-weight:700;letter-spacing:.06em">
           ${esc(st.friendCode)} <button class="ol-btn alt mini" data-olf="copy" style="margin-left:6px;padding:2px 7px;font-size:10.5px">Copiar</button>
+          <button class="ol-btn alt mini" data-olf="share-link" style="margin-left:4px;padding:2px 7px;font-size:10.5px" title="Copiar enlace para Discord o navegador">🔗 Compartir</button>
         </div>
         <div class="pg-desc" style="margin-top:14px">${esc(desc)}</div>
         <div class="pg-stats" style="margin-top:15px">
@@ -927,10 +943,10 @@ async function render(soft) {
 async function open(opts) {
   opts = opts || {};
   returnTarget = opts.from || "settings"; // it is opened from Settings, so it goes back there (Settings sits over the shelf)
-  ensure(); busy = false; mode = "home"; view = null; focusEl = null; prev = {}; held = null;
+  ensure(); busy = false; mode = opts.view ? "view" : "home"; view = opts.view || null; focusEl = null; prev = {}; held = null;
   el.classList.remove("closing");
   el.classList.add("on");
-  el.innerHTML = `<div class="ol-wrap"><div class="ol-top"><div><div class="ol-brand">Boxshelf</div><h1 class="ol-title">Boxshelf Online</h1></div><button class="ol-x" data-olf="close">✕</button></div><div class="ol-loading">Conectando…</div></div>`;
+  el.innerHTML = `<div class="ol-wrap"><div class="ol-top"><div><div class="ol-brand">Boxshelf</div><h1 class="ol-title">${mode === "view" ? "Perfil" : "Boxshelf Online"}</h1></div><button class="ol-x" data-olf="close">✕</button></div><div class="ol-loading">Conectando…</div></div>`;
   el.querySelectorAll("[data-olf]").forEach(b => b.onclick = () => { focusEl = b; act(); });
   await render();
 }
@@ -957,5 +973,15 @@ function close() {
     }
   }, 220);
 }
+
+// Deep linking: escuchar cuando se abre un perfil desde un enlace externo (Discord o navegador)
+if (api.onOpenUser) {
+  api.onOpenUser(d => {
+    if (d && d.code) {
+      open({ view: d.code, from: "shelf" });
+    }
+  });
+}
+
 window.BS_ONLINE = { open, close };
 })();

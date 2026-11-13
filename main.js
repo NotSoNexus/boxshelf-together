@@ -208,6 +208,45 @@ if (linux.isLinux) { steamdeck.init({ log }); linuxpad.init({ log }); const d = 
 // Only one Boxshelf at a time: a second launch brings the first one forward.
 const firstInstance = app.requestSingleInstanceLock();
 if (!firstInstance) { log('Already running, focusing the open window'); app.quit(); }
+
+// Deep linking: registrar protocolo boxshelf://
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('boxshelf', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('boxshelf');
+}
+
+let pendingDeepLink = null;
+function handleDeepLinkUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return;
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== 'boxshelf:') return;
+    // Formato: boxshelf://user/<code_or_name>
+    const parts = (u.hostname + u.pathname).split('/').filter(Boolean);
+    const cmd = parts[0] || '';
+    const target = parts[1] || '';
+    if ((cmd === 'user' || cmd === 'add' || cmd === 'profile') && target) {
+      if (alive() && win && win.webContents) {
+        win.webContents.send('online:openUser', { code: target });
+      } else {
+        pendingDeepLink = target;
+      }
+    }
+  } catch (e) {
+    log('deep link parse error', e.message);
+  }
+}
+
+// Comprobar argumentos de inicio por si se abrió directamente desde un enlace
+for (const arg of process.argv) {
+  if (arg && arg.startsWith('boxshelf://')) {
+    handleDeepLinkUrl(arg);
+    break;
+  }
+}
 // (beta.9) which page crashed (the shelf, the Home menu overlay, a helper page), the shelf's last steps (app.js uiCrumb: what
 // it was doing, with its memory use) and the PC's free memory: written to the log only when one crashes. The shelf reloads
 // itself (createWindow), the Home menu closes itself (homemenu.js); each says so in the log
@@ -225,7 +264,18 @@ setTimeout(() => { try { const root = app.getPath('crashDumps'), all = []; const
   walk(root); all.sort((a, b) => b.t - a.t).slice(10).forEach(x => { try { fs.unlinkSync(x.f); } catch {} }); } catch {} }, 60000).unref();
 app.on('child-process-gone', (e, d) => log('Helper process stopped:', d.type, d.reason, d.exitCode));
 process.on('exit', code => log('Exiting with code', code));
-app.on('second-instance', () => { if (alive() && launcher.isRunning()) { padwatch.front(runKind === 'app'); return; } /* (a media app: leave the pad-driven pointer where it is) */ /* a game is on: keep it in front, don't half-show the shelf */ if (alive()) { if (win.isMinimized()) win.restore(); stepIn(); try { win.setOpacity(1); } catch {} win.show(); win.focus(); } });
+app.on('second-instance', (event, commandLine) => {
+  if (Array.isArray(commandLine)) {
+    for (const arg of commandLine) {
+      if (arg && arg.startsWith('boxshelf://')) {
+        handleDeepLinkUrl(arg);
+        break;
+      }
+    }
+  }
+  if (alive() && launcher.isRunning()) { padwatch.front(runKind === 'app'); return; } /* (a media app: leave the pad-driven pointer where it is) */ /* a game is on: keep it in front, don't half-show the shelf */
+  if (alive()) { if (win.isMinimized()) win.restore(); stepIn(); try { win.setOpacity(1); } catch {} win.show(); win.focus(); }
+});
 
 // bsfile:// serves local images and videos (covers, Steam art, logos, boot videos).
 // Chromium's web cache: downloads are saved by Boxshelf itself, so a small cache is plenty (it had grown to 360 MB)
@@ -348,7 +398,16 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   // (beta.9) the screen busy for several seconds without answering (Windows' "not responding"), and when it's back
   try { let hungAt = 0; win.on('unresponsive', () => { hungAt = Date.now(); log('The screen stopped answering (last:', lastEvent + ')'); }); win.on('responsive', () => { if (hungAt) log('The screen answers again after', Date.now() - hungAt, 'ms'); hungAt = 0; }); } catch {}
-  win.webContents.on('did-finish-load', () => { scaleSent = ''; applyScale(); });
+  win.webContents.on('did-finish-load', () => {
+    scaleSent = ''; applyScale();
+    if (pendingDeepLink) {
+      const code = pendingDeepLink;
+      pendingDeepLink = null;
+      setTimeout(() => {
+        try { if (alive() && win && win.webContents) win.webContents.send('online:openUser', { code }); } catch {}
+      }, 1200);
+    }
+  });
   // (beta.9) right-click in a text box: Cut / Copy / Paste / Select all, as anywhere else on the PC (an Electron app has no
   // menu of its own, so pasting a key with the mouse did nothing). Only on boxes you can type in; the rest of the screen is unchanged.
   win.webContents.on('context-menu', (e, p) => { if (!p || !p.isEditable) return;
