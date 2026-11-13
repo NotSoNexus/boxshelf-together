@@ -12,7 +12,7 @@ const img = (u, srv) => { u = String(u || ""); if (!u) return ""; return /^https
 const digits = s => String(s || "").replace(/\D/g, "");
 const pretty = d => /^\d{12}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 8) + "-" + d.slice(8) : "";
 
-let el = null, busy = false, mode = "home", view = null, focusEl = null, raf = 0, prev = {}, held = null, heldAt = 0, srv = "", returnTarget = "shelf", isClosing = false;
+let el = null, busy = false, mode = "home", view = null, focusEl = null, raf = 0, prev = {}, held = null, heldAt = 0, srv = "", returnTarget = "shelf", isClosing = false, authTab = "register", checkNameT = null;
 
 /* ---------- screen ---------- */
 function ensure() {
@@ -129,6 +129,17 @@ function ensure() {
 .ol-presence-status{display:inline-flex;align-items:center;gap:7px;margin:12px 0 8px;font-size:12px;color:rgba(220,235,255,.7)}
 .ol-presence-status.online{color:#7dd3fc}
 .ol-presence-status .ol-status-dot{position:relative;bottom:auto;right:auto;border:0;width:9px;height:9px}
+.ol-tab-row{display:flex;gap:6px;padding:4px;border-radius:14px;background:rgba(5,9,26,.65);border:1px solid rgba(190,214,255,.14);margin-bottom:14px}
+.ol-tab-btn{flex:1;padding:9px 14px;border:0;border-radius:10px;background:transparent;color:rgba(210,225,255,.7);font:700 13px inherit;cursor:pointer;transition:background .15s,color .15s}
+.ol-tab-btn:hover,.ol-tab-btn.nav-focus{background:rgba(255,255,255,.08);color:#fff}
+.ol-tab-btn.active{background:#4f83f4;color:#fff;box-shadow:0 4px 14px rgba(79,131,244,.4)}
+.ol-name-status{margin-top:6px;font-size:11.5px;font-weight:600;min-height:16px}
+.ol-name-status.ok{color:#34d399}
+.ol-name-status.err{color:#f87171}
+.ol-name-status.wait{color:#93c5fd}
+.ol-name-status.info{color:rgba(198,214,255,.55)}
+.ol-btn.sure{background:#ff5d5d!important;color:#fff!important}
+
 
 `; document.head.appendChild(st);
   el = document.createElement("div"); el.id = "onlinePanel"; document.body.appendChild(el);
@@ -166,7 +177,44 @@ function act() {
   if (f === "back") { mode = "home"; view = null; render(); return; }
   if (f === "sync") return run(() => api.onlineSync(), "Perfil sincronizado.", true);
   if (f === "copy") { try { navigator.clipboard.writeText(myCode); toast("Código copiado. Compártelo con tus amigos.", true); } catch { toast("No se pudo copiar."); } return; }
-  if (f === "create") { const n = el.querySelector("#olName"); if (!n) return; return run(async () => { await api.onlineRegister(n.value); await api.onlineSync(); }, "¡Cuenta creada! Ya estás en Boxshelf Online."); }
+  if (f === "tab-reg") { authTab = "register"; render(); return; }
+  if (f === "tab-login") { authTab = "login"; render(); return; }
+  if (f === "create") {
+    const n = el.querySelector("#olRegName"), p = el.querySelector("#olRegPass");
+    if (!n || !p) return;
+    const name = n.value.trim(), pass = p.value.trim();
+    if (name.length < 3) { toast("El nombre debe tener al menos 3 caracteres."); return; }
+    if (pass.length < 4) { toast("La contraseña debe tener al menos 4 caracteres."); return; }
+    return run(async () => {
+      await api.onlineRegister(name, pass);
+      await api.onlineSync();
+    }, "¡Cuenta creada! Ya estás en Boxshelf Together.");
+  }
+  if (f === "login") {
+    const idEl = el.querySelector("#olLoginId"), pEl = el.querySelector("#olLoginPass");
+    if (!idEl || !pEl) return;
+    const id = idEl.value.trim(), pass = pEl.value.trim();
+    if (!id) { toast("Escribe tu nombre de usuario o código."); return; }
+    if (!pass) { toast("Escribe tu contraseña."); return; }
+    return run(async () => {
+      const res = await api.onlineLogin(id, pass);
+      await api.onlineSync();
+      return "¡Sesión iniciada! Bienvenido, " + (res.name || id);
+    }, "¡Sesión iniciada!");
+  }
+  if (f === "logout") {
+    const b = focusEl;
+    if (!b.classList.contains("sure")) {
+      b.classList.add("sure");
+      b.textContent = "¿Cerrar sesión?";
+      setTimeout(() => { if (b) { b.classList.remove("sure"); b.textContent = "Cerrar sesión"; } }, 3200);
+      return;
+    }
+    return run(async () => {
+      await api.onlineLogout();
+      return "Sesión cerrada.";
+    });
+  }
   if (f === "add") return addFriend();
   if (f === "avatar" || f === "banner") return pickImage(f);
   if (f === "view") { mode = "view"; view = code; render(); return; }

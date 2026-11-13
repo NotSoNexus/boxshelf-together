@@ -21,7 +21,10 @@ contextBridge.exposeInMainWorld('boxshelf', {
   // Boxshelf Online (perfiles y amigos)
   onlineStatus: () => call('online:status'),
   onlineSetServer: url => call('online:setServer', { url: String(url || '') }),
-  onlineRegister: name => call('online:register', { name: String(name || '') }),
+  onlineCheckName: name => call('online:checkName', { name: String(name || '') }),
+  onlineRegister: (name, password) => call('online:register', { name: String(name || ''), password: String(password || '') }),
+  onlineLogin: (identifier, password) => call('online:login', { identifier: String(identifier || ''), password: String(password || '') }),
+  onlineLogout: () => call('online:logout'),
   onlineSync: () => call('online:sync'),
   onlineUpload: (kind, data) => call('online:upload', { kind: String(kind || ''), data: data || {} }),
   onlineFriends: () => call('online:friends'),

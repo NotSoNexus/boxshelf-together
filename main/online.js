@@ -145,4 +145,4 @@ async function upload(kind, data) {
   if (!r.ok) throw new Error(r.error || 'No se pudo subir la imagen.');
   return r.data;
 }
-module.exports = { init, status, setServer, register, sync, friends, add, remove, view, upload, server };
+module.exports = { init, status, setServer, checkName, register, login, logout, sync, friends, add, remove, view, upload, server };

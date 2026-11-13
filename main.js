@@ -910,7 +910,10 @@ handle('clipboard:text', () => { const { clipboard } = require('electron'); retu
   const onlineSyncData = () => { let totalMs = 0; try { for (const v of Object.values(loadHistory())) totalMs += Math.max(0, +v.ms || 0); } catch {} return { totalMs, favorites: (cfg.ui && cfg.ui.favorites) || [] }; };
   handle('online:status', () => online.status());
   handle('online:setServer', ({ url }) => online.setServer(url));
-  handle('online:register', ({ name }) => online.register(name));
+  handle('online:checkName', ({ name }) => online.checkName(name));
+  handle('online:register', ({ name, password }) => online.register(name, password));
+  handle('online:login', ({ identifier, password }) => online.login(identifier, password));
+  handle('online:logout', () => online.logout());
   handle('online:sync', () => { const p = profiles.current(); return online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner }); });
   handle('online:upload', ({ kind, data }) => online.upload(kind, data));
   handle('online:friends', () => online.friends());

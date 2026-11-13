@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   banner      TEXT DEFAULT '',
   favorites   TEXT DEFAULT '[]',         -- JSON: lista de ids favoritos
   totalMs     INTEGER DEFAULT 0,
+  passwordHash TEXT DEFAULT '',
   playing     TEXT DEFAULT '',           -- "jugando ahora" (fase 3)
   tokenHash   TEXT NOT NULL,             -- la única llave de la cuenta; el token nunca se guarda tal cual
   createdAt   INTEGER,

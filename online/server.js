@@ -106,19 +106,52 @@ async function route(req, res) {
 
   if (method === 'GET' && p.startsWith('/img/')) return serveImg(res, p.slice(5));
 
+  if (method === 'GET' && p === '/v1/check-name') {
+    const rawName = u.searchParams.get('name') || '';
+    const name = clean(rawName, 32);
+    if (name.length < 3) return ok(res, { available: false, reason: 'Mínimo 3 caracteres' });
+    const exists = Object.values(db.users).some(u => u.name.toLowerCase() === name.toLowerCase());
+    return ok(res, { available: !exists, name });
+  }
+
   if (method === 'POST' && p === '/v1/register') {
     const ip = ipOf(req);
     if (!registerAllowed(ip)) return fail(res, 429, 'Demasiados registros desde esta conexión. Prueba más tarde.');
     let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
     const name = clean(b.name, 32);
-    if (name.length < 1) return fail(res, 400, 'Escribe un nombre.');
+    if (name.length < 3) return fail(res, 400, 'El nombre debe tener al menos 3 caracteres.');
+    const password = String(b.password || '').trim();
+    if (password.length < 4) return fail(res, 400, 'La contraseña debe tener al menos 4 caracteres.');
     if (Object.values(db.users).some(u => u.name.toLowerCase() === name.toLowerCase())) return fail(res, 409, 'Ya existe alguien con ese nombre. Elige otro.');
     const code = newCode(), token = crypto.randomBytes(32).toString('hex');
-    db.users[code] = { code, name, description: '', avatar: '', banner: '', favorites: [], totalMs: 0, tokenHash: sha256(token), createdAt: Date.now(), friends: [], incoming: [], outgoing: [] };
+    const passwordHash = sha256(password + ':' + code);
+    db.users[code] = { code, name, passwordHash, description: '', avatar: '', banner: '', favorites: [], totalMs: 0, tokenHash: sha256(token), createdAt: Date.now(), updatedAt: Date.now(), friends: [], incoming: [], outgoing: [] };
     save();
     console.log(`[register] ${prettyCode(code)} ${name} (ip ${ip})`);
-    // the token is shown once: the app keeps it in the player's own folder (export it to move the account)
-    return ok(res, { friendCode: prettyCode(code), token });
+    return ok(res, { friendCode: prettyCode(code), token, name });
+  }
+
+  if (method === 'POST' && p === '/v1/login') {
+    let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
+    const id = clean(b.identifier, 32);
+    const password = String(b.password || '').trim();
+    if (!id || !password) return fail(res, 400, 'Escribe tu usuario y contraseña.');
+    const idDigits = digits(id);
+    const target = Object.values(db.users).find(u => u.name.toLowerCase() === id.toLowerCase() || (idDigits.length === 12 && u.code === idDigits));
+    if (!target) return fail(res, 401, 'Usuario o contraseña incorrectos.');
+    if (target.passwordHash) {
+      if (sha256(password + ':' + target.code) !== target.passwordHash) {
+        return fail(res, 401, 'Usuario o contraseña incorrectos.');
+      }
+    } else {
+      target.passwordHash = sha256(password + ':' + target.code);
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    target.tokenHash = sha256(token);
+    target.updatedAt = Date.now();
+    save();
+    console.log(`[login] ${prettyCode(target.code)} ${target.name}`);
+    return ok(res, { friendCode: prettyCode(target.code), token, name: target.name });
   }
 
   const user = me(req);

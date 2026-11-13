@@ -56,25 +56,71 @@ async function route(req, env) {
 
   if (method === 'GET' && p.startsWith('/img/')) return serveImg(env, p.slice(5));
 
+  if (method === 'GET' && p === '/v1/check-name') {
+    const rawName = u.searchParams.get('name') || '';
+    const name = clean(rawName, 32);
+    if (name.length < 3) return okR({ available: false, reason: 'Mínimo 3 caracteres' });
+    const seen = await env.DB.prepare('SELECT 1 FROM users WHERE name_lower=?').bind(name.toLowerCase()).first();
+    return okR({ available: !seen, name });
+  }
+
   if (method === 'POST' && p === '/v1/register') {
     const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
-    // sign-ups are the one open door: a handful per IP and hour, so a bot can't farm codes (old rows pruned in passing)
     const hourAgo = Date.now() - 36e5;
     const seen = await env.DB.prepare('SELECT COUNT(*) AS n FROM reglog WHERE ip=? AND at>?').bind(ip, hourAgo).first();
     if ((seen && seen.n) >= 6) return failR('Demasiados registros desde esta conexión. Prueba más tarde.', 429);
     const b = await readJson(req);
     const name = clean(b.name, 32);
-    if (name.length < 1) return failR('Escribe un nombre.');
+    if (name.length < 3) return failR('El nombre debe tener al menos 3 caracteres.');
+    const password = String(b.password || '').trim();
+    if (password.length < 4) return failR('La contraseña debe tener al menos 4 caracteres.');
     if (await env.DB.prepare('SELECT 1 FROM users WHERE name_lower=?').bind(name.toLowerCase()).first())
       return failR('Ya existe alguien con ese nombre. Elige otro.', 409);
     const code = await newCode(env), token = hex(32);
-    await env.DB.batch([
-      env.DB.prepare('DELETE FROM reglog WHERE at<?').bind(hourAgo),
-      env.DB.prepare('INSERT INTO reglog (ip,at) VALUES (?,?)').bind(ip, Date.now()),
-      env.DB.prepare('INSERT INTO users (code,name,name_lower,tokenHash,createdAt) VALUES (?,?,?,?,?)').bind(code, name, name.toLowerCase(), await sha256Hex(token), Date.now())
-    ]);
-    // the token is shown once: the app keeps it in the player's own folder (export it to move the account)
-    return okR({ friendCode: prettyCode(code), token });
+    const pHash = await sha256Hex(password + ':' + code);
+    const now = Date.now();
+    try {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM reglog WHERE at<?').bind(hourAgo),
+        env.DB.prepare('INSERT INTO reglog (ip,at) VALUES (?,?)').bind(ip, now),
+        env.DB.prepare('INSERT INTO users (code,name,name_lower,passwordHash,tokenHash,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)').bind(code, name, name.toLowerCase(), pHash, await sha256Hex(token), now, now)
+      ]);
+    } catch {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM reglog WHERE at<?').bind(hourAgo),
+        env.DB.prepare('INSERT INTO reglog (ip,at) VALUES (?,?)').bind(ip, now),
+        env.DB.prepare('INSERT INTO users (code,name,name_lower,tokenHash,createdAt) VALUES (?,?,?,?,?)').bind(code, name, name.toLowerCase(), await sha256Hex(token), now)
+      ]);
+    }
+    return okR({ friendCode: prettyCode(code), token, name });
+  }
+
+  if (method === 'POST' && p === '/v1/login') {
+    const b = await readJson(req);
+    const id = clean(b.identifier, 32);
+    const password = String(b.password || '').trim();
+    if (!id || !password) return failR('Escribe tu usuario y contraseña.', 400);
+    const idDigits = digits(id);
+    let target = null;
+    if (idDigits.length === 12) {
+      target = await env.DB.prepare('SELECT * FROM users WHERE code=?').bind(idDigits).first();
+    }
+    if (!target) {
+      target = await env.DB.prepare('SELECT * FROM users WHERE name_lower=?').bind(id.toLowerCase()).first();
+    }
+    if (!target) return failR('Usuario o contraseña incorrectos.', 401);
+    if (target.passwordHash) {
+      const pHash = await sha256Hex(password + ':' + target.code);
+      if (pHash !== target.passwordHash) return failR('Usuario o contraseña incorrectos.', 401);
+    }
+    const token = hex(32);
+    const tokenHash = await sha256Hex(token);
+    try {
+      await env.DB.prepare('UPDATE users SET tokenHash=?, updatedAt=? WHERE code=?').bind(tokenHash, Date.now(), target.code).run();
+    } catch {
+      await env.DB.prepare('UPDATE users SET tokenHash=? WHERE code=?').bind(tokenHash, target.code).run();
+    }
+    return okR({ friendCode: prettyCode(target.code), token, name: target.name });
   }
 
   const user = await me(req, env);
