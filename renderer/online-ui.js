@@ -499,8 +499,8 @@ function accountView(st) {
   const bannerSrc = localUrl(st.localBanner || (st.me && st.me.banner));
   const avatarSrc = localUrl(st.localAvatar || (st.me && st.me.avatar));
   const desc = (st.me && st.me.description) || st.pDesc || "Tu perfil de Boxshelf Together";
-  const displayHours = (st.me && st.me.totalMs > 0) ? st.me.totalMs : (st.hours || 0);
-  const displayFavs = (st.me && Array.isArray(st.me.favorites) && st.me.favorites.length) ? st.me.favorites.length : (st.favs || 0);
+  const displayHours = (st.me && st.me.totalMs != null) ? Math.max(0, +st.me.totalMs || 0) : (st.hours || 0);
+  const displayFavs = (st.me && typeof st.me.favorites === 'number') ? st.me.favorites : (st.favs || 0);
 
   return `<div class="ol-grid">
     <div>

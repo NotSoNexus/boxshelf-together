@@ -887,7 +887,7 @@ ipcMain.on('home:meta', (e, m) => { if (!m || typeof m !== 'object') return; con
 emucfg.init(log);
 modelfind.init(log);
 app.on('will-quit', () => { try { config.flush(); } catch {}; try { padbattery.stop(); } catch {} }); // (beta.9: settings still waiting to be written go to disk now)
-app.on('before-quit', () => { if (onlinePresenceTimer) { clearInterval(onlinePresenceTimer); onlinePresenceTimer = null; } try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner, playing: '' }); } catch {} if (tbHidden) { tbHidden = false; padwatch.stop(); padwatch.taskbarSync(true); try { fs.unlinkSync(tbMark()); } catch {} log('Taskbar back (Boxshelf quitting)'); } /* (beta.6) */ clearTimeout(scaleT); historyEnd(); companion.stop().catch(() => {}); /* the phone companion's server and its connections */ padwatch.stop(); wiimote.stop(); homemenu.end(); modelfind.stop(); clearQuitCover(); clearTimeout(focusOnlyT); if (coverTimer) { clearInterval(coverTimer.keep); clearTimeout(coverTimer); coverTimer = null; }
+app.on('before-quit', () => { if (onlinePresenceTimer) { clearInterval(onlinePresenceTimer); onlinePresenceTimer = null; } try { onlinePush(''); } catch {} if (tbHidden) { tbHidden = false; padwatch.stop(); padwatch.taskbarSync(true); try { fs.unlinkSync(tbMark()); } catch {} log('Taskbar back (Boxshelf quitting)'); } /* (beta.6) */ clearTimeout(scaleT); historyEnd(); companion.stop().catch(() => {}); /* the phone companion's server and its connections */ padwatch.stop(); wiimote.stop(); homemenu.end(); modelfind.stop(); clearQuitCover(); clearTimeout(focusOnlyT); if (coverTimer) { clearInterval(coverTimer.keep); clearTimeout(coverTimer); coverTimer = null; }
   romWatchers.forEach(w => { try { w.close(); } catch {} }); romWatchers = []; clearTimeout(romWatchT); clearTimeout(iconLateT); Object.values(retestT).forEach(clearTimeout); if (moving) clearTimeout(moving.t); });
 function handle(name, fn) {
   ipcMain.handle(name, async (e, ...args) => {
@@ -903,19 +903,60 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
   handle('config:get', () => ({ config: cfg, consoles: CONSOLES, apps: APPS, appRoot: paths.appRoot(), version: app.getVersion(), hasInfo: covers.hasInfo(), settingsBlocked: config.blocked(), profile: profiles.current() }));
   handle('profiles:list', () => profiles.list());
   handle('profiles:create', ({ name }) => profiles.create(name, config.file()));
-  handle('profiles:update', ({ id, patch }) => { profiles.update(String(id || ''), patch && typeof patch === 'object' ? patch : {}); setTimeout(() => { try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner }); } catch {} }, 2500); }); // an edited profile (picture included) reaches the server by itself
+  handle('profiles:update', ({ id, patch }) => { profiles.update(String(id || ''), patch && typeof patch === 'object' ? patch : {}); setTimeout(() => { try { onlinePush(); } catch {} }, 2500); }); // an edited profile (picture included) reaches the server by itself
   handle('profiles:stage', ({ file }) => profiles.stage(file)); // a just-picked picture, served before the profile is saved
 
   // ---------- Boxshelf Online (perfiles y amigos; el internet va solo por aquí, la página no habla https) ----------
   online.init(profiles, config, log);
-  const onlineSyncData = () => { let totalMs = 0; try { for (const v of Object.values(loadHistory())) totalMs += Math.max(0, +v.ms || 0); } catch {} return { totalMs, favorites: (cfg.ui && cfg.ui.favorites) || [] }; };
+  // ---------- hours follow the online account: every account keeps its own per-game history file ----------
+  const digitsCode = v => String(v || '').replace(/\D/g, '');
+  const currentOnlineCode = () => { try { const d = JSON.parse(fs.readFileSync(profiles.dataFile('online.json'), 'utf8')); return digitsCode(d && d.code); } catch { return ''; } };
+  const ownerFile = () => profiles.dataFile('history-owner.json');
+  const readHistoryOwner = () => { try { const o = JSON.parse(fs.readFileSync(ownerFile(), 'utf8')); return digitsCode(o && o.code); } catch { return ''; } };
+  const writeHistoryOwner = code => { try { fs.writeFileSync(ownerFile(), JSON.stringify({ code: digitsCode(code) })); } catch (e) { log('history owner save', e.message); } };
+  const accountHistoryFile = code => profiles.dataFile('history-' + digitsCode(code) + '.json');
+  const historyTotal = file => { try { const o = JSON.parse(fs.readFileSync(file, 'utf8')); let t = 0; for (const v of Object.values(o || {})) t += Math.max(0, +(v && v.ms) || 0); return t; } catch { return 0; } };
+  const setOnlinePicSha = (kind, file) => { try { const f = profiles.dataFile('online.json'), d = JSON.parse(fs.readFileSync(f, 'utf8')); d[kind === 'avatar' ? 'avSha' : 'bnSha'] = require('crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'); fs.writeFileSync(f, JSON.stringify(d, null, 2)); } catch {} };
+  // A different account must never inherit (or be given) this one's hours: its own file is restored, or it starts clean.
+  function adoptAccountHistory(code, prevCode, serverTotal) {
+    code = digitsCode(code); prevCode = digitsCode(prevCode);
+    if (!code) return;
+    const prevOwner = readHistoryOwner();
+    if (code === prevCode && (!prevOwner || prevOwner === code)) { writeHistoryOwner(code); return; }
+    const cur = profiles.dataFile('history.json'), own = accountHistoryFile(code);
+    const curTotal = historyTotal(cur), srv = Math.max(0, Math.round(+serverTotal) || 0);
+    if (prevOwner && curTotal > 0) { try { fs.copyFileSync(cur, accountHistoryFile(prevOwner)); } catch {} } // always keep the owner's copy
+    if (fs.existsSync(own)) { try { fs.copyFileSync(own, cur); } catch (e) { log('history account restore', e.message); } }
+    else if (srv > 0 && curTotal > 0 && Math.abs(srv - curTotal) <= 60000) { try { fs.copyFileSync(cur, own); } catch {} } // the same hours: keep the per-game breakdown
+    else {
+      if (curTotal > 0 && !prevOwner) { try { fs.copyFileSync(cur, profiles.dataFile('history-unclaimed.json')); } catch {} } // never throw real hours away
+      try { fs.writeFileSync(cur, '{}'); } catch (e) { log('history account clear', e.message); }
+    }
+    try { const f = profiles.dataFile('online.json'), d = JSON.parse(fs.readFileSync(f, 'utf8')); delete d.avSha; delete d.bnSha; fs.writeFileSync(f, JSON.stringify(d, null, 2)); } catch {}
+    writeHistoryOwner(code);
+    history = null; histFile = null; histOpen = null;
+    if (alive()) win.webContents.send('history:changed', { account: code });
+  }
+  const onlineOwned = () => { const c = currentOnlineCode(), o = readHistoryOwner(); return !!(c && o && c === o); };
+  const onlineSyncData = () => {
+    let totalMs = 0; try { for (const v of Object.values(loadHistory())) totalMs += Math.max(0, +v.ms || 0); } catch {}
+    const code = currentOnlineCode(), owner = readHistoryOwner(), mine = !!(code && owner && owner === code);
+    return { totalMs: mine ? totalMs : 0, favorites: (mine && totalMs > 0) ? ((cfg.ui && cfg.ui.favorites) || []) : null }; // hours and favourites travel only with the account that owns them
+  };
+  const onlinePush = playing => {
+    try {
+      const p = profiles.current(), mine = onlineOwned();
+      // the local name and pictures belong to the owning account too: a different one is never given them
+      return online.sync({ ...onlineSyncData(), ...(mine ? { name: p.name, avatar: p.avatar, banner: p.banner } : {}), playing });
+    } catch (e) { log('online sync', e.message); }
+  };
   // ---------- presence: "Jugando a…" on the server, with a slow heartbeat that also lands the hours there ----------
   let onlinePresenceTimer = null, onlinePresence = null;
   function setOnlinePresence(playing) {
     playing = String(playing || '').slice(0, 120);
     if (onlinePresence === playing) return;
     onlinePresence = playing;
-    const send = () => { try { const p = profiles.current(); online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner, playing }); } catch (e) { log('online presence', e.message); } };
+    const send = () => { try { onlinePush(playing); } catch (e) { log('online presence', e.message); } };
     clearInterval(onlinePresenceTimer); onlinePresenceTimer = null;
     send();
     if (playing) onlinePresenceTimer = setInterval(send, 120000); // 2 min: fresh presence without hammering the server
@@ -924,73 +965,62 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
   handle('online:setServer', ({ url }) => online.setServer(url));
   handle('online:checkName', ({ name }) => online.checkName(name));
   handle('online:register', async ({ name, password, email }) => {
+    const prevCode = currentOnlineCode();
     const res = await online.register(name, password, email);
     try {
       const cur = profiles.current();
       const newName = (res && res.name) || name;
       if (cur && cur.id && newName && !res.pendingVerification) {
-        profiles.update(cur.id, { name: newName });
+        adoptAccountHistory(res.friendCode, prevCode, 0);
+        profiles.update(cur.id, { name: newName, description: '', avatar: '', banner: '' }); // a new account starts clean
       }
     } catch {}
     return res;
   });
   handle('online:verifyEmail', async ({ email, code }) => {
+    const prevCode = currentOnlineCode();
     const res = await online.verifyEmail(email, code);
     try {
       const cur = profiles.current();
       if (cur && cur.id && res && res.name) {
-        profiles.update(cur.id, { name: res.name });
+        adoptAccountHistory(res.friendCode, prevCode, 0);
+        profiles.update(cur.id, { name: res.name, description: '', avatar: '', banner: '' });
       }
     } catch {}
     return res;
   });
   handle('online:resendCode', ({ email }) => online.resendCode(email));
   handle('online:login', async ({ identifier, password }) => {
+    const prevCode = currentOnlineCode();
     const res = await online.login(identifier, password);
     try {
       const cur = profiles.current();
       if (cur && cur.id && res && res.name) {
-        const patch = { name: res.name };
-        // Si el usuario en el servidor tiene avatar o banner, descargarlos a la carpeta del perfil local
         let profileData = null;
-        try {
-          profileData = await online.view(res.friendCode);
-          if (profileData) {
-            if (profileData.description) patch.description = profileData.description;
-            const pDir = path.dirname(profiles.dataFile('avatar.jpg'));
-            fs.mkdirSync(pDir, { recursive: true });
-            const srv = online.server();
-            if (profileData.avatar && typeof profileData.avatar === 'string') {
-              const avUrl = profileData.avatar.startsWith('http') ? profileData.avatar : srv + profileData.avatar;
-              const avDest = path.join(pDir, 'avatar.jpg');
-              try {
-                const r = await fetch(avUrl);
-                if (r.ok) {
-                  const buf = Buffer.from(await r.arrayBuffer());
-                  fs.writeFileSync(avDest, buf);
-                  patch.avatar = avDest;
-                }
-              } catch {}
-            }
-            if (profileData.banner && typeof profileData.banner === 'string') {
-              const bnUrl = profileData.banner.startsWith('http') ? profileData.banner : srv + profileData.banner;
-              const bnDest = path.join(pDir, 'banner.jpg');
-              try {
-                const r = await fetch(bnUrl);
-                if (r.ok) {
-                  const buf = Buffer.from(await r.arrayBuffer());
-                  fs.writeFileSync(bnDest, buf);
-                  patch.banner = bnDest;
-                }
-              } catch {}
-            }
+        try { profileData = await online.view(res.friendCode); } catch (errSync) { log('online login sync error', errSync.message); }
+        // the hours are the account's: restore this account's own history (or keep it if it's the same 6 h), never inherit another's
+        if (profileData) adoptAccountHistory(res.friendCode, prevCode, profileData.totalMs);
+        const patch = { name: res.name, description: (profileData && profileData.description) || '', avatar: '', banner: '' };
+        if (profileData) {
+          try { fs.mkdirSync(path.dirname(profiles.dataFile('avatar.jpg')), { recursive: true }); } catch {}
+          const srv = online.server();
+          for (const kind of ['avatar', 'banner']) { // the account's own pictures, or none at all (never the previous account's)
+            const rel = profileData[kind];
+            if (!rel || typeof rel !== 'string') continue;
+            const url = rel.startsWith('http') ? rel : srv + rel;
+            const dest = profiles.dataFile(kind + '.jpg');
+            try {
+              const r = await fetch(url);
+              if (!r.ok) continue;
+              fs.writeFileSync(dest, Buffer.from(await r.arrayBuffer()));
+              patch[kind] = dest;
+              setOnlinePicSha(kind, dest); // the copy is what the server already has: don't upload it again
+            } catch {}
           }
-        } catch (errSync) {
-          log('online login sync error', errSync.message);
         }
         profiles.update(cur.id, patch);
-        // the hours belong to the profile: keep the local per-game history, but read it fresh (the cache may be from another
-        // profile) and, if this profile has no history yet, bring the server's total back so nothing looks lost
+        // read the history fresh (the cache may be from another profile) and, if this account has no history yet, bring its
+        // server total back so the hours never look lost
         history = null;
         try {
           const h = loadHistory();
@@ -1006,6 +1036,8 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
   });
   handle('online:logout', () => {
     try {
+      const owner = readHistoryOwner(); // keep this account's per-game hours safe before the profile is wiped
+      if (owner) { try { fs.copyFileSync(profiles.dataFile('history.json'), accountHistoryFile(owner)); } catch {} }
       const cur = profiles.current();
       if (cur && cur.id) {
         let defaultName = 'Jugador 1';
@@ -1036,8 +1068,7 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
   handle('online:sync', () => {
     history = null; // forzar recarga fresca de history.json desde el disco
     if (alive()) win.webContents.send('history:changed', { sync: 1 }); // the shelf's hours are read again too
-    const p = profiles.current();
-    return online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner });
+    return onlinePush();
   });
   handle('online:upload', ({ kind, data }) => online.upload(kind, data));
   handle('online:friends', () => online.friends());
