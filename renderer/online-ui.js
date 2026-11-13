@@ -196,7 +196,7 @@ function act() {
         authTab = "verify-reg";
         await render();
         if (res.devCode) {
-          const verifyInp = el.querySelector("#olRegVerifyInput");
+          const verifyInp = el.querySelector("#olVerifyCode") || el.querySelector("#olRegVerifyInput");
           if (verifyInp) verifyInp.value = res.devCode;
           return "Código de prueba: " + res.devCode;
         }
@@ -205,8 +205,8 @@ function act() {
       await api.onlineSync();
     }, "¡Cuenta creada! Ya estás en Boxshelf Together.");
   }
-  if (f === "confirm-reg-code") {
-    const inp = el.querySelector("#olRegVerifyInput");
+  if (f === "confirm-reg-code" || f === "verify") {
+    const inp = el.querySelector("#olVerifyCode") || el.querySelector("#olRegVerifyInput");
     const code = inp ? inp.value.trim().replace(/\D/g, '') : '';
     if (code.length !== 6) { toast("Escribe el código de 6 dígitos."); return; }
     return run(async () => {
@@ -218,7 +218,19 @@ function act() {
       return "¡Cuenta verificada y creada con éxito!";
     });
   }
-  if (f === "cancel-reg-code") {
+  if (f === "resend" || f === "resend-reg-code") {
+    if (!pendingEmail) return;
+    return run(async () => {
+      const res = await api.onlineResendCode(pendingEmail);
+      if (res && res.devCode) {
+        const verifyInp = el.querySelector("#olVerifyCode") || el.querySelector("#olRegVerifyInput");
+        if (verifyInp) verifyInp.value = res.devCode;
+        return "Código de prueba: " + res.devCode;
+      }
+      return "Código reenviado a " + pendingEmail;
+    });
+  }
+  if (f === "cancel-reg-code" || f === "cancel-verify") {
     authTab = "register";
     pendingEmail = "";
     render();
