@@ -85,7 +85,7 @@ async function route(req, env) {
   if (method === 'GET' && p.startsWith('/img/')) return serveImg(env, p.slice(5));
 
   if (method === 'GET' && p === '/v1/check-name') {
-    const rawName = u.searchParams.get('name') || '';
+    const rawName = url.searchParams.get('name') || '';
     const name = clean(rawName, 32);
     if (name.length < 3) return okR({ available: false, reason: 'Mínimo 3 caracteres' });
     const seen = await env.DB.prepare('SELECT 1 FROM users WHERE name_lower=?').bind(name.toLowerCase()).first();
@@ -118,7 +118,7 @@ async function route(req, env) {
           .bind(emailRaw, verifyCode, name, password, Date.now() + 600000).run();
       } catch {}
       await sendWorkerEmail(env, emailRaw, verifyCode);
-      return okR({ pendingVerification: true, email: emailRaw });
+      return okR({ pendingVerification: true, email: emailRaw, devCode: env.RESEND_API_KEY ? undefined : verifyCode });
     }
 
     const code = await newCode(env), token = hex(32);
@@ -239,7 +239,7 @@ async function route(req, env) {
         .bind(emailRaw, verifyCode, user.code, '', Date.now() + 600000).run();
     } catch {}
     await sendWorkerEmail(env, emailRaw, verifyCode);
-    return okR({ pendingVerification: true, email: emailRaw });
+    return okR({ pendingVerification: true, email: emailRaw, devCode: env.RESEND_API_KEY ? undefined : verifyCode });
   }
 
   if (method === 'POST' && p === '/v1/me/confirm-email') {

@@ -180,15 +180,46 @@ function act() {
   if (f === "tab-reg") { authTab = "register"; render(); return; }
   if (f === "tab-login") { authTab = "login"; render(); return; }
   if (f === "create") {
-    const n = el.querySelector("#olRegName"), p = el.querySelector("#olRegPass");
+    const n = el.querySelector("#olRegName"), p = el.querySelector("#olRegPass"), emInp = el.querySelector("#olRegEmail");
     if (!n || !p) return;
-    const name = n.value.trim(), pass = p.value.trim();
+    const name = n.value.trim(), pass = p.value.trim(), email = emInp ? emInp.value.trim() : "";
     if (name.length < 3) { toast("El nombre debe tener al menos 3 caracteres."); return; }
     if (pass.length < 4) { toast("La contraseña debe tener al menos 4 caracteres."); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("El formato de correo no es válido."); return; }
     return run(async () => {
-      await api.onlineRegister(name, pass);
+      const res = await api.onlineRegister(name, pass, email);
+      if (res && res.pendingVerification) {
+        pendingEmail = res.email || email;
+        authTab = "verify-reg";
+        await render();
+        if (res.devCode) {
+          const verifyInp = el.querySelector("#olRegVerifyInput");
+          if (verifyInp) verifyInp.value = res.devCode;
+          return "Código de prueba: " + res.devCode;
+        }
+        return "Código enviado a " + pendingEmail;
+      }
       await api.onlineSync();
     }, "¡Cuenta creada! Ya estás en Boxshelf Together.");
+  }
+  if (f === "confirm-reg-code") {
+    const inp = el.querySelector("#olRegVerifyInput");
+    const code = inp ? inp.value.trim().replace(/\D/g, '') : '';
+    if (code.length !== 6) { toast("Escribe el código de 6 dígitos."); return; }
+    return run(async () => {
+      await api.onlineVerifyEmail(pendingEmail, code);
+      authTab = "register";
+      pendingEmail = "";
+      await api.onlineSync();
+      await render();
+      return "¡Cuenta verificada y creada con éxito!";
+    });
+  }
+  if (f === "cancel-reg-code") {
+    authTab = "register";
+    pendingEmail = "";
+    render();
+    return;
   }
   if (f === "start-link") { linkStep = 1; render(); return; }
   if (f === "cancel-link") { linkStep = 0; linkEmailDraft = ""; render(); return; }
@@ -199,9 +230,14 @@ function act() {
     if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { toast("El formato de correo no es válido."); return; }
     linkEmailDraft = em;
     return run(async () => {
-      await api.onlineLinkEmail(em);
+      const res = await api.onlineLinkEmail(em);
       linkStep = 2;
       await render();
+      if (res && res.devCode) {
+        const verifyInp = el.querySelector("#olLinkVerifyInput");
+        if (verifyInp) verifyInp.value = res.devCode;
+        return "Código de prueba: " + res.devCode;
+      }
       return "Código enviado a " + em;
     });
   }
@@ -477,7 +513,15 @@ function html(st, lists) {
           <button class="ol-tab-btn ${authTab === "register" ? "active" : ""}" data-olf="tab-reg">Crear cuenta</button>
           <button class="ol-tab-btn ${authTab === "login" ? "active" : ""}" data-olf="tab-login">Iniciar sesión</button>
         </div>
-        ${authTab === "register" ? `
+        ${authTab === "verify-reg" ? `
+          <div class="ol-note" style="margin-bottom:14px">Te enviamos un código de 6 dígitos a <b>${esc(pendingEmail)}</b>. Escríbelo para confirmar tu cuenta.</div>
+          <span class="ol-lab">Código de verificación (6 dígitos)</span>
+          <input class="ol-input" id="olRegVerifyInput" maxlength="6" inputmode="numeric" placeholder="123456" style="font-size:20px;letter-spacing:6px;text-align:center;">
+          <div class="ol-row" style="margin-top:20px">
+            <button class="ol-btn" data-olf="confirm-reg-code" ${busy ? "disabled" : ""}>Confirmar y entrar</button>
+            <button class="ol-btn alt" data-olf="cancel-reg-code" ${busy ? "disabled" : ""}>Volver</button>
+          </div>
+        ` : authTab === "register" ? `
           <div class="ol-note" style="margin-bottom:14px">Únete a Boxshelf Together con tu nombre único para jugar con amigos.</div>
           
           <span class="ol-lab">Nombre de usuario</span>

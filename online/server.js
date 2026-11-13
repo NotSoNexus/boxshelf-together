@@ -150,7 +150,7 @@ async function route(req, res) {
   if (method === 'GET' && p.startsWith('/img/')) return serveImg(res, p.slice(5));
 
   if (method === 'GET' && p === '/v1/check-name') {
-    const rawName = u.searchParams.get('name') || '';
+    const rawName = url.searchParams.get('name') || '';
     const name = clean(rawName, 32);
     if (name.length < 3) return ok(res, { available: false, reason: 'Mínimo 3 caracteres' });
     const exists = Object.values(db.users).some(u => u.name.toLowerCase() === name.toLowerCase());
@@ -174,7 +174,7 @@ async function route(req, res) {
       const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
       pendingVerifications.set(emailRaw, { code: verifyCode, name, password, email: emailRaw, expiresAt: Date.now() + 600000 });
       await sendVerificationEmail(emailRaw, verifyCode);
-      return ok(res, { pendingVerification: true, email: emailRaw });
+      return ok(res, { pendingVerification: true, email: emailRaw, devCode: process.env.RESEND_API_KEY ? undefined : verifyCode });
     }
 
     // Registro directo sin correo
@@ -265,7 +265,7 @@ async function route(req, res) {
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
     pendingVerifications.set(emailRaw, { code: verifyCode, userCode: user.code, email: emailRaw, expiresAt: Date.now() + 600000 });
     await sendVerificationEmail(emailRaw, verifyCode);
-    return ok(res, { pendingVerification: true, email: emailRaw });
+    return ok(res, { pendingVerification: true, email: emailRaw, devCode: process.env.RESEND_API_KEY ? undefined : verifyCode });
   }
 
   if (method === 'POST' && p === '/v1/me/confirm-email') {

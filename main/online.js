@@ -76,7 +76,7 @@ async function register(name, password, email) {
   const r = await call('/v1/register', { method: 'POST', body: { name, password, email: email || undefined } });
   if (!r.ok) throw new Error(r.error || 'No se pudo crear la cuenta.');
   if (r.data && r.data.pendingVerification) {
-    return { pendingVerification: true, email: r.data.email };
+    return { pendingVerification: true, email: r.data.email, devCode: r.data.devCode };
   }
   write({ ...(read() || {}), token: r.data.token, code: r.data.friendCode, name: r.data.name || name, email: email || '', lastSync: 0 });
   return status();
