@@ -76,13 +76,13 @@ function ensure() {
 .ol-tag.wait{background:rgba(255,209,120,.13);color:#ffd178}
 .ol-empty{margin-top:10px;padding:16px;border:1px dashed rgba(190,214,255,.22);border-radius:14px;text-align:center;font-size:12.5px;color:rgba(198,214,255,.6)}
 /* friend profile view */
-.ol-hero{position:relative;height:190px;border-radius:16px;overflow:hidden;background:linear-gradient(130deg,#3263cb,#7445b4)}
-.ol-hero img{width:100%;height:100%;object-fit:cover;display:block}
-.ol-hero .ol-back{position:absolute;left:12px;top:12px;background:rgba(5,9,26,.6);backdrop-filter:blur(4px)}
-.ol-view .ol-av{width:78px;height:78px;margin:-40px 0 0 18px;border:3px solid rgba(255,255,255,.92);position:relative}
-.ol-view .ol-name{font-size:23px}.ol-code-s{font-size:11px;color:#9fb4e6;letter-spacing:.1em;font-family:ui-monospace,Consolas,monospace}
-.ol-desc-big{margin-top:12px;font-size:13.5px;color:rgba(235,242,255,.85);line-height:1.5}
-.ol-badge{display:inline-block;padding:4px 10px;border-radius:99px;background:rgba(159,230,169,.16);color:#9fe6a9;font-size:11px;font-weight:800;letter-spacing:.06em}
+.ol-hero{position:relative;height:230px;border-radius:18px;overflow:hidden;background:linear-gradient(130deg,#1e3a78,#4a2777)}
+.ol-hero img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+.ol-hero .ol-back{position:absolute;left:14px;top:14px;background:rgba(5,9,26,.65);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.2);z-index:10}
+.ol-view .ol-av{width:96px;height:96px;margin:0;border:4px solid #fff;border-radius:50%;overflow:hidden;position:relative;box-shadow:0 10px 28px rgba(0,0,0,.5);background:#0c1538;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;color:#fff;flex:none}
+.ol-view .ol-name{font-size:26px;font-weight:800;color:#fff;line-height:1.15}.ol-code-s{font-size:13px;color:#93c5fd;letter-spacing:.08em;font-weight:700;font-family:ui-monospace,Consolas,monospace}
+.ol-desc-big{margin-top:16px;font-size:15px;color:rgba(230,240,255,.9);line-height:1.6;font-weight:500}
+.ol-badge{display:inline-block;padding:6px 16px;border-radius:99px;background:rgba(159,230,169,.16);color:#9fe6a9;font-size:12px;font-weight:800;letter-spacing:.06em}
 .ol-toast{margin-top:16px;min-height:20px;font-size:13px;font-weight:700;color:#ffb4b4}.ol-toast.good{color:#9fe6a9}
 /* create account */
 .ol-create{max-width:520px;margin:26px auto 0}
@@ -614,36 +614,54 @@ function profileView(p) {
   const bannerSrc = p.banner ? esc(img(p.banner, srv)) : "";
   const avatarSrc = p.avatar ? esc(img(p.avatar, srv)) : "";
 
-  return `<div class="ol-view" style="max-width:380px;margin:20px auto 0">
-    <div style="margin-bottom:14px">
+  return `<div class="ol-card ol-view" style="width:100%;max-width:820px;margin:18px auto 0;padding:14px;border-radius:22px;box-shadow:0 24px 60px rgba(0,0,0,.45);border:1px solid rgba(190,214,255,.2);box-sizing:border-box">
+    <div class="ol-hero">
+      ${bannerSrc ? `<img src="${bannerSrc}" alt="">` : ""}
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(5,9,26,.75) 100%);pointer-events:none"></div>
       <button class="ol-btn mini alt ol-back" data-olf="back">← Volver</button>
     </div>
-    <div class="pg-card" style="width:100%;min-height:280px;cursor:default;box-sizing:border-box">
-      <span class="pg-banner">${bannerSrc ? `<img class="pg-banner-img" src="${bannerSrc}" alt="">` : ""}</span>
-      <span class="pg-shade"></span>
-      <span class="pp-avatar pg-avatar">${avatarSrc ? `<img src="${avatarSrc}" alt="">` : esc(((p.name || "?")[0]).toUpperCase())}</span>
-      <div class="pg-name" style="display:flex;align-items:center;justify-content:space-between">
-        <span>${esc(p.name)}</span>
-        ${p.isFriend === false ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}" style="padding:6px 14px">+ Agregar</button>` : `<span class="ol-badge">Amigos</span>`}
-      </div>
-      <div style="position:relative;margin-top:4px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#93c5fd;font-weight:700;letter-spacing:.06em">
-        ${esc(pretty(digits(p.code)) || p.code)}
-      </div>
 
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:0 18px;margin-top:-48px;position:relative;z-index:2">
+      <div style="display:flex;align-items:flex-end;gap:16px;min-width:0;flex:1">
+        <div class="ol-av">
+          ${avatarSrc ? `<img src="${avatarSrc}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : esc(((p.name || "?")[0]).toUpperCase())}
+        </div>
+        <div style="padding-bottom:6px;min-width:0;flex:1">
+          <div class="ol-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+          <div class="ol-code-s" style="margin-top:4px">
+            ${esc(pretty(digits(p.code)) || p.code)}
+          </div>
+        </div>
+      </div>
+      <div style="padding-bottom:8px;margin-left:14px;flex:none">
+        ${p.isFriend === false ? `<button class="ol-btn" data-olf="accept" data-code="${esc(p.code)}" style="padding:10px 22px;font-size:13.5px;font-weight:700;border-radius:12px">+ Agregar amigo</button>` : `<span class="ol-badge">Amigos</span>`}
+      </div>
+    </div>
+
+    <div style="padding:0 18px 8px">
       ${isPlaying ? `
-        <div class="ol-presence-hero" style="position:relative;margin:14px 0 0;padding:10px 14px;border-radius:12px">
-          <span class="ol-ph-dot"></span>
-          <div class="ol-ph-body">
-            <div class="ol-ph-badge">Jugando ahora</div>
-            <div class="ol-ph-title">${esc(p.playing)}</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:16px;padding:12px 16px;border-radius:14px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35)">
+          <span class="ol-status-dot playing" style="position:static;width:12px;height:12px;border:none"></span>
+          <div>
+            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#34d399">Jugando ahora</div>
+            <div style="font-size:15px;font-weight:700;color:#fff">${esc(p.playing)}</div>
           </div>
         </div>
       ` : ""}
 
-      <div class="pg-desc" style="margin-top:14px">${esc(p.description || "Sin descripción.")}</div>
-      <div class="pg-stats" style="margin-top:15px">
-        <span><b>${p.favorites || 0}</b>Favoritos</span>
-        <span><b>${fmt(p.totalMs)}</b>Tiempo jugado</span>
+      <div class="ol-desc-big">
+        ${esc(p.description || "Sin descripción.")}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px">
+        <div style="padding:14px 18px;border-radius:14px;background:rgba(5,9,26,.55);border:1px solid rgba(190,214,255,.14)">
+          <div style="font-size:24px;font-weight:800;color:#fff">${fmt(p.totalMs)}</div>
+          <div style="font-size:12px;color:#9fb4e6;text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:3px">Horas jugadas</div>
+        </div>
+        <div style="padding:14px 18px;border-radius:14px;background:rgba(5,9,26,.55);border:1px solid rgba(190,214,255,.14)">
+          <div style="font-size:24px;font-weight:800;color:#fff">${p.favorites || 0}</div>
+          <div style="font-size:12px;color:#9fb4e6;text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:3px">Favoritos</div>
+        </div>
       </div>
     </div>
   </div>`;
