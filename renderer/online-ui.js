@@ -303,6 +303,9 @@ function act() {
     }
     return run(async () => {
       await api.onlineLogout();
+      try {
+        if (window.Shelf && window.Shelf.refresh) window.Shelf.refresh(true);
+      } catch {}
       return "Sesión cerrada.";
     });
   }

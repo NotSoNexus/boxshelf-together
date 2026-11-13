@@ -911,11 +911,54 @@ handle('clipboard:text', () => { const { clipboard } = require('electron'); retu
   handle('online:status', () => online.status());
   handle('online:setServer', ({ url }) => online.setServer(url));
   handle('online:checkName', ({ name }) => online.checkName(name));
-  handle('online:register', ({ name, password, email }) => online.register(name, password, email));
+  handle('online:register', async ({ name, password, email }) => {
+    const res = await online.register(name, password, email);
+    try {
+      const cur = profiles.current();
+      if (cur && cur.id && res && res.name) {
+        profiles.update(cur.id, { name: res.name });
+      }
+    } catch {}
+    return res;
+  });
   handle('online:verifyEmail', ({ email, code }) => online.verifyEmail(email, code));
   handle('online:resendCode', ({ email }) => online.resendCode(email));
-  handle('online:login', ({ identifier, password }) => online.login(identifier, password));
-  handle('online:logout', () => online.logout());
+  handle('online:login', async ({ identifier, password }) => {
+    const res = await online.login(identifier, password);
+    try {
+      const cur = profiles.current();
+      if (cur && cur.id && res && res.name) {
+        profiles.update(cur.id, { name: res.name });
+      }
+    } catch {}
+    return res;
+  });
+  handle('online:logout', () => {
+    try {
+      const cur = profiles.current();
+      if (cur && cur.id) {
+        let defaultName = 'Jugador 1';
+        const list = profiles.list();
+        if (list && list.profiles) {
+          let idx = 1;
+          while (list.profiles.some(x => x.id !== cur.id && x.name.toLowerCase() === defaultName.toLowerCase())) {
+            idx++;
+            defaultName = 'Jugador ' + idx;
+          }
+        }
+        profiles.update(cur.id, {
+          name: defaultName,
+          description: '',
+          avatar: '',
+          banner: '',
+          fit: { avatar: { z: 1, x: 0, y: 0 }, banner: { z: 1, x: 0, y: 0 } }
+        });
+      }
+    } catch (e) {
+      log('logout clear profile', e.message);
+    }
+    return online.logout();
+  });
   handle('online:linkEmail', ({ email }) => online.linkEmail(email));
   handle('online:confirmEmail', ({ email, code }) => online.confirmEmail(email, code));
   handle('online:setPassword', ({ newPassword, currentPassword }) => online.setPassword(newPassword, currentPassword));

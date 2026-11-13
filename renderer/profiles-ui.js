@@ -1,5 +1,5 @@
 (function(){"use strict";const api=window.boxshelf,$=id=>document.getElementById(id),url=p=>p?'bsfile://local/'+encodeURIComponent(p):'';
-let list=null,started=false,picking=false,confirmPref='auto',prefsRead=false;
+let list=null,started=false,picking=false,confirmPref='auto',prefsRead=false,onlineRegistered=false;
 let focusEl=null,gateClosable=false,padRaf=0,padIdx=-1,prevB={},dirHeld=null,dirAt=0,returnTarget='shelf',isGateClosing=false;
 const knownPads=new Map(); // index → id: to say "connected" / "disconnected" even when Chromium doesn't fire the event
 const fmt=ms=>{ms=+ms||0;const m=Math.round(ms/6e4);if(m<1)return "menos de 1 min";if(m<60)return m+" min";const h=Math.floor(m/60);return h>=100?Math.floor(h/24)+" d "+h%24+" h":h+" h"}; // under an hour says the minutes: "0 h" looked like nothing was ever saved
@@ -11,6 +11,8 @@ const banner=p=>p.banner?`<img class="pg-banner-img" src="${url(p.banner)}" alt=
 const gateOn=()=>{const g=$("profileGate");return !!(g&&g.classList.contains("on"))};
 const popOn=()=>{const p=$("profilePopover");return !!(p&&!p.hidden)};
 const shown=el=>!!el&&el.offsetParent!==null;
+async function syncOnlineReg(){try{const st=await api.onlineStatus();onlineRegistered=!!(st&&st.registered)}catch{onlineRegistered=false}return onlineRegistered}
+function openOnlineFromGate(){closeGate();setTimeout(()=>{if(window.BS_ONLINE&&BS_ONLINE.open)BS_ONLINE.open({from:"profiles"})},260)}
 async function get(){list=await api.profiles();return list}
 // Settings → Controller → Confirm button (auto: the right button confirms on a Nintendo pad, the bottom one elsewhere).
 // The gate is up before the shelf applies its settings, so it reads them here itself.
@@ -51,7 +53,7 @@ function targets(){
     if(ed&&ed.adjust)return []; // the picture panel moves the photo with the D-pad, so nothing is focused there
     if(osk)return Array.from(g.querySelectorAll(".pe-key")).filter(shown); // the on-screen keyboard owns the pad while it is up
     const panel=g.querySelector(".profile-editor");
-    if(panel){const items=Array.from(panel.querySelectorAll(".pe-field,[data-save],[data-create],[data-cancel]")).filter(shown);
+    if(panel){const items=Array.from(panel.querySelectorAll(".pe-field,[data-save],[data-create],[data-cancel],[data-open-online]")).filter(shown);
       const cl=g.querySelector(".pg-close");if(cl&&shown(cl))items.push(cl);
       return items}
     return Array.from(g.querySelectorAll(".pg-card,.pg-add,.pg-close")).filter(shown)}
@@ -83,6 +85,7 @@ function step(dir){
 function activate(){if(picking)return;if(!focusEl||!targets().includes(focusEl))focusFirst();const el=focusEl;if(!el)return;
   if(osk){if(el.dataset.k!=null)pressKey(el.dataset.k);return}
   if(el.dataset.field){activateField(el.dataset.field);return}
+  if(el.hasAttribute("data-open-online")){openOnlineFromGate();return}
   if(el.hasAttribute("data-save")){saveProfile();return}
   if(el.hasAttribute("data-create")){createProfile();return}
   if(el.hasAttribute("data-cancel")){closeEditor();return}
@@ -180,9 +183,10 @@ const OSK_LOWER=[["1","2","3","4","5","6","7","8","9","0"],["q","w","e","r","t",
 const OSK_UPPER=OSK_LOWER.map(r=>r.map(c=>c.toUpperCase()));
 const OSK_SYM=[["!","@","#","$","%","^","&","*","(",")"],["\\","/",":",";","_","=","+","{","}","~"],["[","]",",","<",">","|","`","\"","'","\u00bf"],["\u00e1","\u00e9","\u00ed","\u00f3","\u00fa","\u00f1","\u00fc","\u00a1","\u00bf","?"]];
 function card(p){return `<button class="pg-card" data-id="${p.id}"><span class="pg-banner">${banner(p)}</span><span class="pg-shade"></span><span class="pp-avatar pg-avatar">${avatar(p)}</span><span class="pg-name">${esc(p.name)}</span><span class="pg-desc">${esc(p.description||"Tu perfil local de Boxshelf")}</span><span class="pg-stats"><span><b>${p.favorites||0}</b>Favoritos</span><span><b>${fmt(p.totalMs)}</b>Tiempo jugado</span></span></button>`}
-function renderGate(edit,closable){
+async function renderGate(edit,closable){
   const gate=$("profileGate");if(!list||!gate)return;
   gateClosable=!!closable;
+  await syncOnlineReg();
   if(edit&&(!ed||ed.mode!=="edit")){const p=list.profiles.find(x=>x.id===list.active)||list.profiles[0];
     ed=p?{mode:"edit",id:p.id,name:p.name||"",desc:p.description||"",avatar:p.avatar||"",banner:p.banner||"",fit:{avatar:fitFor(p,"avatar"),banner:fitFor(p,"banner")},field:null,adjust:null}:null;osk=null}
   const head=`<div class="pg-kicker">Boxshelf</div><div class="pg-title">${ed?(ed.mode==="create"?"Nuevo perfil":"Tu perfil"):"¿Quién está jugando?"}</div>`;
@@ -194,6 +198,7 @@ function renderGate(edit,closable){
   const cl=gate.querySelector('[data-close]');if(cl)cl.onclick=closeGate;
   const saveB=gate.querySelector('[data-save]');if(saveB)saveB.onclick=saveProfile;
   const crB=gate.querySelector('[data-create]');if(crB)crB.onclick=createProfile;
+  const onlB=gate.querySelector('[data-open-online]');if(onlB)onlB.onclick=openOnlineFromGate;
   gate.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=closeEditor);
   gate.querySelectorAll('.pe-field').forEach(b=>b.onclick=()=>activateField(b.dataset.field));
   gate.querySelectorAll('.pe-key').forEach(b=>b.onclick=()=>{focusEl=b;paint();pressKey(b.dataset.k)});
@@ -258,6 +263,23 @@ function adjustHtml(){
     <button class="pe-mini go" data-done>Aplicar</button></div>
     <div class="pe-hint pe-adjust-hint"></div></div>`}
 function editorHtml(){
+  if(!onlineRegistered){
+    const lockBox=`<div class="pe-head" style="display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700"><span style="font-size:24px">🔒</span> Personalización bloqueada</div>
+    <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:22px;margin:18px 0 22px;text-align:left">
+      <div style="font-size:15.5px;font-weight:700;color:#fff;margin-bottom:8px">Cuenta de Boxshelf Online requerida</div>
+      <p style="font-size:13px;line-height:1.55;color:rgba(215,230,255,.82);margin:0 0 14px">
+        Para personalizar tu perfil (cambiar nombre, foto de perfil, banner y descripción) es obligatorio tener una cuenta iniciada en <b>Boxshelf Online</b>.
+      </p>
+      <div style="font-size:12px;color:rgba(180,205,255,.65);line-height:1.4">
+        Crea tu cuenta gratis para desbloquear la personalización completa de tu perfil y sincronizarla en la nube.
+      </div>
+    </div>
+    <div class="pe-actions" style="margin-top:0">
+      <button class="go" data-open-online style="background:#5277ff;color:#fff;font-weight:700;padding:12px 20px;font-size:13.5px;border-radius:10px">Crear cuenta / Iniciar sesión</button>
+      <button class="alt" data-cancel style="padding:12px 18px;font-size:13.5px;border-radius:10px">Volver</button>
+    </div>`;
+    return `<section class="profile-editor"><div class="pe-cols"><div class="pe-left">${previewHtml()}</div><div class="pe-side">${lockBox}</div></div></section>`;
+  }
   const tail=`${osk?oskHtml():'<div class="pe-hint"></div>'}<div class="pe-actions">`;
   const inputs=ed.mode==="edit"?`<input id="peAvatarFile" type="file" accept="image/*" hidden><input id="peBannerFile" type="file" accept="image/*" hidden>`:'';
   const grid=ed.mode==="create"
@@ -347,11 +369,16 @@ function oskStep(dir){
   focusEl=rows[nr][nc];paint();try{focusEl.scrollIntoView({block:"nearest"})}catch{}
 }
 async function saveProfile(){if(!ed||ed.mode!=="edit")return;
+  await syncOnlineReg();
+  if(!onlineRegistered){gateToast("Se requiere una cuenta de Boxshelf Online para personalizar el perfil");openOnlineFromGate();return}
   const name=String(ed.name||"").trim();if(!name){gateToast("Escribe un nombre para el perfil");return}
   try{await api.updateProfile(ed.id,{name,description:String(ed.desc||"").trim(),avatar:ed.avatar||"",banner:ed.banner||"",fit:ed.fit||{}});
-    await get();ed=null;osk=null;renderGate(false,gateClosable);gateToast("Perfil guardado")}
+    await get();ed=null;osk=null;renderGate(false,gateClosable);gateToast("Perfil guardado");
+    try{await api.onlineSync()}catch{}}
   catch(e){gateToast(e&&e.message||"No se pudo guardar el perfil")}}
 async function createProfile(){if(!ed||ed.mode!=="create")return;
+  await syncOnlineReg();
+  if(!onlineRegistered){gateToast("Se requiere una cuenta de Boxshelf Online para crear un perfil");openOnlineFromGate();return}
   const name=String(ed.name||"").trim();if(!name){gateToast("Escribe un nombre para el perfil");return}
   try{const p=await api.createProfile(name);await choose(p.id)}catch(e){gateToast(e&&e.message||"No se pudo crear el perfil")}}
 
@@ -370,8 +397,16 @@ async function choose(id){
   // if the reload never lands, put the screen back so a second try is possible
   setTimeout(()=>{if(!picking)return;picking=false;try{sessionStorage.removeItem('boxshelf-profile-picked')}catch{}gate&&gate.classList.remove('picking');padStatus();gateToast("No se pudo abrir la biblioteca. Prueba otra vez.")},4000);
 }
-async function add(){ed={mode:"create",name:"",desc:"",avatar:"",banner:"",field:"name"};osk={layer:0};renderGate(false,gateClosable)}
-async function manage(){returnTarget="shelf";const el=$("profilePopover");if(el)el.hidden=true;await get();ed=null;osk=null;renderGate(true,true)}
+async function add(){
+  await syncOnlineReg();
+  if(!onlineRegistered){
+    gateToast("Crea una cuenta en Boxshelf Online para personalizar o crear perfiles");
+    openOnlineFromGate();
+    return;
+  }
+  ed={mode:"create",name:"",desc:"",avatar:"",banner:"",field:"name"};osk={layer:0};renderGate(false,gateClosable)
+}
+async function manage(){returnTarget="shelf";const el=$("profilePopover");if(el)el.hidden=true;await syncOnlineReg();await get();ed=null;osk=null;renderGate(true,true)}
 
 async function toggle(){const el=$("profilePopover");if(!el)return;if(!el.hidden){el.hidden=true;return}await prefs();await get();
   el.innerHTML=`<div class="pp-title">Cambiar perfil</div>${list.profiles.map(p=>`<button class="pp-row ${p.id===list.active?'current':''}" data-id="${p.id}"><span class="pp-avatar">${avatar(p)}</span><span><span class="pp-name">${esc(p.name)}</span><span class="pp-desc">${p.favorites||0} favoritos · ${fmt(p.totalMs)}</span></span>${p.id===list.active?'<span class="pp-current">En uso</span>':''}</button>`).join('')}<button class="pp-manage" data-manage>Gestionar perfiles</button><div class="pp-hint">D-pad para mover · ${okWord(currentPad())} para elegir</div>`;
@@ -390,6 +425,6 @@ async function showStartup(){
 // button's menu and Settings → Player profiles still open it whenever you want).
 const gateSeen=()=>{try{return localStorage.getItem('boxshelf-profile-gate')==='1'}catch{return false}};
 const gateMark=()=>{try{localStorage.setItem('boxshelf-profile-gate','1')}catch{}};
-window.BS_PROFILES={showStartup,toggle,openSettings:async(opts)=>{returnTarget=(opts&&opts.from)||"settings";await prefs();await get();renderGate(true,true)}};
+window.BS_PROFILES={showStartup,toggle,openSettings:async(opts)=>{returnTarget=(opts&&opts.from)||"settings";await syncOnlineReg();await prefs();await get();renderGate(true,true)}};
 document.addEventListener('click',e=>{const pop=$("profilePopover"),btn=$("profileBtn");if(pop&&!pop.hidden&&!pop.contains(e.target)&&!btn.contains(e.target))pop.hidden=true});
 })();
