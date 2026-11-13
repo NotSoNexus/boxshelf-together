@@ -211,6 +211,7 @@ contextBridge.exposeInMainWorld('boxshelf', {
   apiStatus: () => call('api:status'),
   testApi: service => call('api:test', { service: String(service || '') }),
   clipboardText: () => call('clipboard:text'), // (beta.9) setup's Paste buttons
+  clipboardWrite: text => call('clipboard:write', { text: String(text || '') }),
   repairManual: (systemId, file) => call('manuals:repair', { systemId: String(systemId || ''), file: String(file || '') }), // (beta.9) the reader's Repair
   raEmulators: () => call('ra:emulators'),
   onApiStatus: fn => ipcRenderer.on('api:status', (e, st) => fn(st)),

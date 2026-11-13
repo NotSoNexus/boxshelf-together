@@ -179,7 +179,29 @@ function act() {
   if (f === "close") return close();
   if (f === "back") { mode = "home"; view = null; render(); return; }
   if (f === "sync") return run(() => api.onlineSync(), "Perfil sincronizado.", true);
-  if (f === "copy") { try { navigator.clipboard.writeText(myCode); toast("Código copiado. Compártelo con tus amigos.", true); } catch { toast("No se pudo copiar."); } return; }
+  if (f === "copy") {
+    const targetCode = pretty(myCode) || myCode;
+    try {
+      if (api.clipboardWrite) {
+        api.clipboardWrite(targetCode);
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(targetCode);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = targetCode;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
+      toast("Código copiado. Compártelo con tus amigos.", true);
+    } catch {
+      toast("No se pudo copiar.");
+    }
+    return;
+  }
   if (f === "tab-reg") { authTab = "register"; render(); return; }
   if (f === "tab-login") { authTab = "login"; render(); return; }
   if (f === "create") {

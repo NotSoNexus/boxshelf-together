@@ -898,6 +898,7 @@ function handle(name, fn) {
 // (beta.9) the Paste buttons beside the key boxes (setup's Accounts page): the clipboard's text, one line, read only when
 // pressed (the page itself may not read the clipboard). Never logged.
 handle('clipboard:text', () => { const { clipboard } = require('electron'); return String(clipboard.readText() || '').split(/\r?\n/)[0].trim().slice(0, 512); });
+handle('clipboard:write', ({ text }) => { const { clipboard } = require('electron'); clipboard.writeText(String(text || '')); return true; });
 
   handle('config:get', () => ({ config: cfg, consoles: CONSOLES, apps: APPS, appRoot: paths.appRoot(), version: app.getVersion(), hasInfo: covers.hasInfo(), settingsBlocked: config.blocked(), profile: profiles.current() }));
   handle('profiles:list', () => profiles.list());
