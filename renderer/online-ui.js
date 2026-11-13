@@ -57,7 +57,9 @@ function ensure() {
 .ol-friend{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;margin-top:9px;text-align:left;color:inherit;font:inherit;cursor:pointer;
   border:1px solid rgba(190,214,255,.16);border-radius:14px;background:rgba(6,10,28,.5);transition:transform .14s,background .14s,border-color .14s}
 .ol-friend:hover,.ol-friend.nav-focus{transform:translateY(-2px);background:rgba(82,124,230,.22);border-color:rgba(158,193,255,.55)}
-.ol-info{min-width:0;flex:1}.ol-name{font-size:14.5px;font-weight:800}.ol-desc{margin-top:2px;font-size:11.5px;color:rgba(235,240,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ol-info{min-width:0;flex:1;display:flex;flex-direction:column;justify-content:center}
+.ol-name{font-size:14.5px;font-weight:800;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ol-desc{margin-top:2px;font-size:11.5px;color:rgba(235,240,255,.6);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ol-meta{margin-left:auto;text-align:right;font-size:10.5px;color:#9db1e2;flex:none}.ol-meta b{display:block;color:#fff;font-size:14.5px;font-weight:800}
 .ol-xsmall{width:30px;height:30px;flex:none;display:grid;place-items:center;border:0;border-radius:9px;background:rgba(255,255,255,.1);color:#e8f0ff;font:800 12px inherit;cursor:pointer;transition:background .14s}
 .ol-xsmall:hover,.ol-xsmall.nav-focus{background:#ff5d5d;color:#fff}
@@ -403,50 +405,65 @@ const avatarHtml = (p, cls) => {
 
 function friendRow(p, o) {
   o = o || {};
-  return `<${o.div ? "div" : "button"} class="ol-friend" ${o.div ? "" : `data-olf="${o.act || "view"}" data-code="${esc(p.code)}"`}>
+  const isPlaying = !!(p && p.playing);
+  return `<${o.div ? "div" : "button"} class="ol-friend ${isPlaying ? "is-playing" : ""}" ${o.div ? "" : `data-olf="${o.act || "view"}" data-code="${esc(p.code)}"`}>
     ${avatarHtml(p, "sm")}
-    <span class="ol-info"><span class="ol-name">${esc(p.name)}</span><span class="ol-desc">${esc(p.description || "Sin descripción")}</span></span>
-    <span class="ol-meta"><b>${fmt(p.totalMs)}</b>${p.favorites || 0} fav${p.playing ? ' · <span style="color:#9fe6a9">jugando</span>' : ""}</span>
+    <span class="ol-info">
+      <span class="ol-name-row">
+        <span class="ol-name">${esc(p.name)}</span>
+        ${isPlaying ? `<span class="ol-live-pill">En juego</span>` : ""}
+      </span>
+      <span class="ol-desc">
+        ${isPlaying ? `<span class="ol-playing-text"><span class="ol-game-icon">🎮</span><span class="ol-game-name">${esc(p.playing)}</span></span>` : esc(p.description || pretty(digits(p.code)) || p.code)}
+      </span>
+    </span>
+    <span class="ol-meta">
+      <b>${fmt(p.totalMs)}</b>
+      <span>${isPlaying ? '<span style="color:#34d399;font-weight:700">En línea</span>' : (p.favorites || 0) + ' favs'}</span>
+    </span>
     ${o.remove ? `<span class="ol-xsmall" data-olf="remove" data-code="${esc(p.code)}" title="Quitar amigo">✕</span>` : ""}
   </${o.div ? "div" : "button"}>`;
 }
 
-// pending requests get their own card: a slice of the person's banner on top (cropped, never stretched),
-// the avatar leaning over its edge, and the whole card opens a preview of their profile
-function pendingRow(p, kind) { // kind "in" = they asked you, "out" = you asked them
+function pendingRow(p, kind) {
   const inr = kind === "in";
-  return `<div class="ol-pend" data-olf="view" data-code="${esc(p.code)}" role="button">
-    <span class="ol-pban">${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="" loading="lazy">` : ""}</span>
-    <div class="ol-prow">
-      ${avatarHtml(p)}
-      <span class="ol-info"><span class="ol-name">${esc(p.name)}</span><span class="ol-desc">${inr ? "Quiere ser tu amigo" : "En espera de su respuesta"} · ${esc(p.code)}</span></span>
-      ${inr ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}">Aceptar</button>` : `<span class="ol-tag wait">Esperando</span>`}
-    </div>
+  return `<div class="ol-friend" data-olf="view" data-code="${esc(p.code)}" role="button" style="margin-top:8px">
+    ${avatarHtml(p, "sm")}
+    <span class="ol-info">
+      <span class="ol-name">${esc(p.name)}</span>
+      <span class="ol-desc" style="font-family:ui-monospace,Consolas,monospace;letter-spacing:.06em;color:#93c5fd;font-size:11px">${esc(pretty(digits(p.code)) || p.code)}</span>
+    </span>
+    ${inr ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}" style="padding:6px 14px">Aceptar</button>` : `<span class="ol-tag wait" style="font-size:10px;padding:3px 9px">Esperando</span>`}
   </div>`;
 }
 
 function accountView(st) {
   return `<div class="ol-grid">
     <div>
-      <div class="ol-card">
-        <span class="ol-lab">Tarjeta de Jugador</span>
-        <div class="ol-me" style="margin-top:12px">${avatarHtml(st.me || {})}
-          <div style="min-width:0">
-            <div class="ol-name">${esc(st.name || "—")}</div>
-            <div class="ol-code"><b>${esc(st.friendCode)}</b><button class="ol-btn alt mini" data-olf="copy">Copiar</button></div>
+      <div class="ol-card" style="padding:0;overflow:hidden">
+        <div style="height:100px;background:linear-gradient(135deg,#1e3a8a,#4c1d95);position:relative">
+          ${st.me && st.me.banner ? `<img src="${esc(img(st.me.banner, srv))}" alt="" style="width:100%;height:100%;object-fit:cover">` : ""}
+        </div>
+        <div style="padding:0 16px 16px">
+          <div class="ol-me" style="margin-top:-32px;position:relative">
+            ${avatarHtml(st.me || {})}
+            <div style="min-width:0;padding-top:22px">
+              <div class="ol-name" style="font-size:20px">${esc(st.name || "—")}</div>
+              <div class="ol-code" style="margin-top:2px"><b>${esc(st.friendCode)}</b><button class="ol-btn alt mini" data-olf="copy">Copiar</button></div>
+            </div>
           </div>
+          <div class="ol-stats" style="margin-top:16px">
+            <span class="ol-stat"><b>${fmt(st.hours)}</b>Horas jugadas</span>
+            <span class="ol-stat"><b>${st.favs}</b>Favoritos</span>
+            <span class="ol-stat"><b style="font-size:13px;margin-top:2px">${ago(st.lastSync)}</b>Última sincro</span>
+          </div>
+          <div class="ol-row" style="margin-top:16px">
+            <button class="ol-btn" data-olf="sync" ${busy ? "disabled" : ""}>Sincronizar ahora</button>
+            <button class="ol-btn alt" data-olf="avatar">Cambiar foto</button>
+            <button class="ol-btn alt" data-olf="banner">Cambiar banner</button>
+          </div>
+          <div class="ol-note" style="margin-top:12px">Tu perfil online se sincroniza automáticamente con tus juegos, favoritos y horas jugadas.</div>
         </div>
-        <div class="ol-stats">
-          <span class="ol-stat"><b>${fmt(st.hours)}</b>Horas jugadas</span>
-          <span class="ol-stat"><b>${st.favs}</b>Favoritos</span>
-          <span class="ol-stat"><b style="font-size:13px;margin-top:2px">${ago(st.lastSync)}</b>Última sincro</span>
-        </div>
-        <div class="ol-row" style="margin-top:16px">
-          <button class="ol-btn" data-olf="sync" ${busy ? "disabled" : ""}>Sincronizar ahora</button>
-          <button class="ol-btn alt" data-olf="avatar">Cambiar foto</button>
-          <button class="ol-btn alt" data-olf="banner">Cambiar banner</button>
-        </div>
-        <div class="ol-note" style="margin-top:12px">Tu perfil online se sincroniza automáticamente con tus juegos, favoritos y horas jugadas.</div>
       </div>
     </div>
 
@@ -580,17 +597,40 @@ function friendsView(st, lists) {
 }
 
 function profileView(p) {
-  return `<div class="ol-card ol-view" style="padding:12px">
-    <div class="ol-hero">${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="">` : ""}
-      <button class="ol-btn mini alt ol-back" data-olf="back">← Volver</button></div>
-    <div style="display:flex;align-items:flex-end;gap:14px;padding:0 18px">
-      ${avatarHtml(p)}
-      <div style="padding-bottom:8px"><div class="ol-name">${esc(p.name)}</div><div class="ol-code-s">${esc(p.code)}</div></div>
-      <div style="margin-left:auto;padding-bottom:8px">${p.isFriend === false ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}">+ Agregar</button>` : `<span class="ol-badge">Amigos</span>`}</div>
+  const hasDesc = !!(p.description && p.description.trim());
+  const isPlaying = !!(p && p.playing);
+  return `<div class="ol-card ol-view" style="padding:16px;max-width:640px;margin:18px auto 0">
+    <div class="ol-hero" style="height:150px;border-radius:14px;overflow:hidden;position:relative">
+      ${p.banner ? `<img src="${esc(img(p.banner, srv))}" alt="" style="object-fit:cover;width:100%;height:100%">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#1e3a8a,#4c1d95)"></div>`}
+      <button class="ol-btn mini alt ol-back" data-olf="back" style="position:absolute;left:12px;top:12px;backdrop-filter:blur(6px);background:rgba(5,9,26,.65);border-radius:10px">← Volver</button>
     </div>
-    <div style="padding:0 18px 16px">
-      <div class="ol-desc-big">${esc(p.description || "Sin descripción.")}</div>
-      <div class="ol-stats"><span class="ol-stat"><b>${fmt(p.totalMs)}</b>Horas jugadas</span><span class="ol-stat"><b>${p.favorites || 0}</b>Favoritos</span></div>
+    <div style="display:flex;align-items:flex-end;gap:14px;padding:0 14px;margin-top:-26px;position:relative">
+      ${avatarHtml(p)}
+      <div style="padding-bottom:4px;min-width:0;flex:1">
+        <div class="ol-name" style="font-size:22px;line-height:1.2">${esc(p.name)}</div>
+        <div class="ol-code-s" style="margin-top:3px;font-size:12px;letter-spacing:.08em;color:#93c5fd">${esc(pretty(digits(p.code)) || p.code)}</div>
+      </div>
+      <div style="margin-left:auto;padding-bottom:4px;flex:none">
+        ${p.isFriend === false ? `<button class="ol-btn mini" data-olf="accept" data-code="${esc(p.code)}">+ Agregar amigo</button>` : `<span class="ol-badge">Amigos</span>`}
+      </div>
+    </div>
+
+    ${isPlaying ? `
+      <div class="ol-presence-hero" style="margin:14px 14px 4px;padding:10px 14px;border-radius:12px">
+        <span class="ol-ph-dot"></span>
+        <div class="ol-ph-body">
+          <div class="ol-ph-badge">Jugando ahora</div>
+          <div class="ol-ph-title">${esc(p.playing)}</div>
+        </div>
+      </div>
+    ` : ""}
+
+    <div style="padding:10px 14px 4px">
+      ${hasDesc ? `<div class="ol-desc-big" style="margin-top:6px;font-size:13px;line-height:1.5;color:rgba(225,235,255,.8);max-height:85px;overflow-y:auto">${esc(p.description)}</div>` : ""}
+      <div class="ol-stats" style="margin-top:14px">
+        <span class="ol-stat"><b>${fmt(p.totalMs)}</b>Horas jugadas</span>
+        <span class="ol-stat"><b>${p.favorites || 0}</b>Favoritos</span>
+      </div>
     </div>
   </div>`;
 }
