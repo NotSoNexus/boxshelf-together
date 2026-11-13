@@ -28,7 +28,8 @@ const IC={
   acct:'<circle cx="12" cy="9" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>',
   sys:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
-  phone:'<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/>'
+  phone:'<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/>',
+  online:'<circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14.5 14.5 0 0 0 0 18M12 3a14.5 14.5 0 0 1 0 18"/>'
 };
 const svg=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${IC[k]||""}</svg>`;
 // the themes (same swatches as the classic page)
@@ -261,9 +262,6 @@ function build(){
     ]),
   ]},
   {g:"Boxshelf",id:"shelf",name:"Shelf",ic:"shelf",lead:"How the shelf behaves: console order, shuffle and the idle show.",rows:[
-    A("Player profiles","Manage","Create or edit local player profiles, including their picture, banner and description.",()=>{close();setTimeout(()=>window.BS_PROFILES&&BS_PROFILES.openSettings({from:"settings"}),220)},{keys:"profiles accounts players avatar banner description"}),
-    A("Online","Friends","Boxshelf Online: create your account, add friends by friend code and see their profiles.",()=>{close();setTimeout(()=>window.BS_ONLINE&&BS_ONLINE.open({from:"settings"}),220)},{keys:"online friends account internet server profiles"}),
-    X("Online server","ui.onlineServer","The server for Boxshelf Online friends and profiles. Leave empty for default.",{ph:"Default server",keys:"online server address host url",live:v=>{if(window.boxshelf&&boxshelf.onlineSetServer)boxshelf.onlineSetServer(v).catch(()=>{})}}),
     A("Console order","Reorder","The order of the consoles along the top. Home always comes first.",()=>openSub({kind:"order"}),{keys:"shelf order arrange tabs move"}),
     /* (beta.11, Windows and Linux) the first-run tour again (tour.js): Settings closes, then it starts on the shelf */
     ...(window.bsPlatform&&bsPlatform.os==="android"?[]:[A("Show the tour","Start","A one-minute look at the basics: consoles, Details, Inspect, the quick menu, the Art Studio and where to add games.",()=>{Promise.resolve(close()).then(()=>setTimeout(()=>{if(window.BS_TOUR)BS_TOUR.start()},450))},{keys:"tour tutorial intro help guide basics how learn"})]),
@@ -341,6 +339,11 @@ function build(){
     H("Quit combo"),
     T("Quit combo","ui.quitCombo",true,"Hold these buttons about a second while a game runs to close the emulator and come back; hold them on the shelf to quit Boxshelf."),
     {t:"choice",label:"Buttons to hold",when:()=>gp("ui.quitCombo")!==false,opts:comboOpts,...bindv("ui.quitComboKeys","l3+r3"),set:v=>{sp("ui.quitComboKeys",v);sp("ui.quitComboChosen",true)},info:"The buttons for the quit combo. They're the same buttons by position on every pad.",keys:"quit combo exit close game hold l3 r3 lb rb start back select plus minus options share"},
+  ]},
+  {g:"Online",id:"online",name:"Online",ic:"online",lead:"Boxshelf Online account, friends, player profiles and server connection.",rows:[
+    A("Player profiles","Manage","Create or edit local player profiles, including their picture, banner and description.",()=>{close();setTimeout(()=>window.BS_PROFILES&&BS_PROFILES.openSettings({from:"online"}),220)},{keys:"profiles accounts players avatar banner description"}),
+    A("Online","Friends","Boxshelf Online: create your account, add friends by friend code and see their profiles.",()=>{close();setTimeout(()=>window.BS_ONLINE&&BS_ONLINE.open({from:"online"}),220)},{keys:"online friends account internet server profiles"}),
+    X("Online server","ui.onlineServer","The server for Boxshelf Online friends and profiles. Leave empty for default.",{ph:"Default server",keys:"online server address host url",live:v=>{if(window.boxshelf&&boxshelf.onlineSetServer)boxshelf.onlineSetServer(v).catch(()=>{})}}),
   ]},
   // (1.80) Box art first: the summary in the heading, Art Studio as the page's first row (with the games that have no cover)
   {g:"Library",id:"art",name:"Box art & manuals",ic:"art",lead:"How your box art looks, what's still missing, and your manuals.",dot:()=>artNoCover()>0?"warn":null,rows:[
@@ -1112,7 +1115,7 @@ function checkPathsSoon(){if(!pathAsk.size||!api.checkPaths)return;const L=[...p
 
 /* ---------- open / close / the classic pages ---------- */
 function ensureCfg(){cfg.ui=cfg.ui||{};cfg.steam=cfg.steam||{enabled:true,path:""};cfg.apps=cfg.apps||{};cfg.ra=cfg.ra||{user:"",key:"",enabled:true};cfg.keys=cfg.keys||{};cfg.systems=cfg.systems||{};(info.apps||[]).forEach(a=>{cfg.apps[a.id]=cfg.apps[a.id]||{enabled:true,path:""}})}
-const PAGE_MAP={bottom:["display","Bottom screen"],phone:"phone",consoles:"consoles",steam:"pc",pc:"pc",epic:"pc",custom:"custom",quiver:"custom",media:"apps",apps:"apps",ra:{svc:"ra"},connections:["acct","fanart.tv"],screenscraper:{svc:"screenscraper"},steamgriddb:{svc:"steamgriddb"},acct:"acct",accounts:"acct",display:"display",perf:"perf",performance:"perf",sound:"sound",controller:"pad",pad:"pad",museum:"museum",shelf:"shelf",library:["art","Fetch manuals for new games"],art:"art",previews:"previews",videos:"previews",trailers:"previews",reading:["reading","Find on the Internet Archive"],magazines:"reading",guides:"reading",manuals:"art",startup:"sys",system:"sys",sys:"sys"};
+const PAGE_MAP={bottom:["display","Bottom screen"],phone:"phone",consoles:"consoles",steam:"pc",pc:"pc",epic:"pc",custom:"custom",quiver:"custom",media:"apps",apps:"apps",online:"online",profiles:"online",together:"online",ra:{svc:"ra"},connections:["acct","fanart.tv"],screenscraper:{svc:"screenscraper"},steamgriddb:{svc:"steamgriddb"},acct:"acct",accounts:"acct",display:"display",perf:"perf",performance:"perf",sound:"sound",controller:"pad",pad:"pad",museum:"museum",shelf:"shelf",library:["art","Fetch manuals for new games"],art:"art",previews:"previews",videos:"previews",trailers:"previews",reading:["reading","Find on the Internet Archive"],magazines:"reading",guides:"reading",manuals:"art",startup:"sys",system:"sys",sys:"sys"};
 // (beta.5) Details → Rename: one game's name, on a page of its own (typed, or with the on-screen keyboard on a controller).
 // Saved by main (cfg.games[key].title) the moment Enter is pressed; "Use the file's name" puts the scanned one back
 let renameState=null;

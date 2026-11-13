@@ -230,9 +230,9 @@ function closeGate(){
     gate.setAttribute('aria-hidden','true');
     const to=returnTarget;
     returnTarget="shelf";
-    if(to==="settings"){
+    if(to==="online"||to==="settings"){
       if(window.Shelf&&Shelf.setMode)Shelf.setMode("browse");
-      if(window.Setup&&Setup.open)Setup.open({page:"shelf"});
+      if(window.Setup&&Setup.open)Setup.open({page:to==="online"?"online":"shelf"});
     }else{
       if(window.Shelf&&Shelf.setMode)Shelf.setMode("browse");
       if(window.Shelf&&Shelf.holdInput)Shelf.holdInput();
