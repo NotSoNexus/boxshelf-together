@@ -3761,7 +3761,10 @@ addEventListener("keydown",e=>{
 
 /* ---------- pointer ---------- */
 let wheelAcc=0,wheelT=0;
-addEventListener("wheel",e=>{if(mode==="inspect"){e.preventDefault();if(rd.open)rdTurn(e.deltaY>0?1:-1);else ispZoom(e.deltaY<0?1:-1);return}
+addEventListener("wheel",e=>{
+  const pg=$("profileGate"),pp=$("profilePopover"),ol=$("onlinePanel");
+  if((pg&&pg.classList.contains("on"))||(pp&&!pp.hidden)||(ol&&ol.classList.contains("on")))return;
+  if(mode==="inspect"){e.preventDefault();if(rd.open)rdTurn(e.deltaY>0?1:-1);else ispZoom(e.deltaY<0?1:-1);return}
   if(mode!=="browse"&&mode!=="details")return;if(qm.open)return; /* the quick menu scrolls itself; the shelf behind stays put */if(e.target.closest&&e.target.closest(".details,.settings,.setup"))return;e.preventDefault();wheelAcc+=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY;const now=performance.now();
   if(Math.abs(wheelAcc)>40&&now-wheelT>70){move(Math.sign(wheelAcc));wheelAcc=0;wheelT=now}},{passive:false});
 let drag=null,dragMoved=false;const slotTap={at:0,i:-1,t:0}; /* (beta.12, Android: the double tap on the case you're on) */
