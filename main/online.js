@@ -51,7 +51,7 @@ const account = () => { const d = read(); return d && d.token ? d : null; };
 
 function status() {
   const d = read();
-  return { server: server(), registered: !!(d && d.token), friendCode: d && d.code, name: d && d.name, lastSync: d && d.lastSync };
+  return { server: server(), registered: !!(d && d.token), friendCode: d && d.code, name: d && d.name, email: (d && d.email) || '', lastSync: d && d.lastSync };
 }
 function setServer(url) {
   url = String(url || '').trim().replace(/\/+$/, '');
@@ -97,6 +97,23 @@ async function resendCode(email) {
   const r = await call('/v1/resend-code', { method: 'POST', body: { email } });
   if (!r.ok) throw new Error(r.error || 'No se pudo reenviar el código.');
   return { sent: true };
+}
+async function linkEmail(email) {
+  const d = account(); if (!d) throw new Error('No tienes cuenta online.');
+  email = String(email || '').trim().toLowerCase();
+  const r = await call('/v1/me/link-email', { method: 'POST', token: d.token, body: { email } });
+  if (!r.ok) throw new Error(r.error || 'No se pudo enviar el código.');
+  return r.data;
+}
+async function confirmEmail(email, code) {
+  const d = account(); if (!d) throw new Error('No tienes cuenta online.');
+  email = String(email || '').trim().toLowerCase();
+  code = String(code || '').trim().replace(/\D/g, '');
+  const r = await call('/v1/me/confirm-email', { method: 'POST', token: d.token, body: { email, code } });
+  if (!r.ok) throw new Error(r.error || 'Código incorrecto o expirado.');
+  d.email = r.data.email || email;
+  write(d);
+  return { ok: true, email: d.email };
 }
 async function login(identifier, password) {
   identifier = String(identifier || '').trim();
@@ -195,4 +212,4 @@ async function upload(kind, data) {
   if (!r.ok) throw new Error(r.error || 'No se pudo subir la imagen.');
   return r.data;
 }
-module.exports = { init, status, setServer, checkName, register, verifyEmail, resendCode, login, logout, sync, friends, add, remove, view, upload, server };
+module.exports = { init, status, setServer, checkName, register, verifyEmail, resendCode, linkEmail, confirmEmail, login, logout, sync, friends, add, remove, view, upload, server };

@@ -916,6 +916,8 @@ handle('clipboard:text', () => { const { clipboard } = require('electron'); retu
   handle('online:resendCode', ({ email }) => online.resendCode(email));
   handle('online:login', ({ identifier, password }) => online.login(identifier, password));
   handle('online:logout', () => online.logout());
+  handle('online:linkEmail', ({ email }) => online.linkEmail(email));
+  handle('online:confirmEmail', ({ email, code }) => online.confirmEmail(email, code));
   handle('online:sync', () => { const p = profiles.current(); return online.sync({ ...onlineSyncData(), name: p.name, avatar: p.avatar, banner: p.banner }); });
   handle('online:upload', ({ kind, data }) => online.upload(kind, data));
   handle('online:friends', () => online.friends());

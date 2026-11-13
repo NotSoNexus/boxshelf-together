@@ -255,7 +255,40 @@ async function route(req, res) {
   const user = me(req);
   if (!user) return fail(res, 401, 'Sesión no válida. Vuelve a entrar con tu código de amigo.');
 
-  if (method === 'GET' && p === '/v1/me') return ok(res, { ...publicProfile(user), favoritesList: user.favorites || [] });
+  if (method === 'GET' && p === '/v1/me') return ok(res, { ...publicProfile(user), email: user.email || '', emailVerified: !!user.emailVerified, favoritesList: user.favorites || [] });
+
+  if (method === 'POST' && p === '/v1/me/link-email') {
+    let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
+    const emailRaw = String(b.email || '').trim().toLowerCase();
+    if (!emailRaw || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) return fail(res, 400, 'El formato del correo electrónico no es válido.');
+    if (Object.values(db.users).some(u => u !== user && u.email_lower === emailRaw)) return fail(res, 409, 'Ese correo electrónico ya está registrado en otra cuenta.');
+    const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+    pendingVerifications.set(emailRaw, { code: verifyCode, userCode: user.code, email: emailRaw, expiresAt: Date.now() + 600000 });
+    await sendVerificationEmail(emailRaw, verifyCode);
+    return ok(res, { pendingVerification: true, email: emailRaw });
+  }
+
+  if (method === 'POST' && p === '/v1/me/confirm-email') {
+    let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }
+    const emailRaw = String(b.email || '').trim().toLowerCase();
+    const inputCode = String(b.code || '').replace(/\D/g, '');
+    const pending = pendingVerifications.get(emailRaw);
+    if (!pending || pending.userCode !== user.code) return fail(res, 400, 'No hay ninguna verificación pendiente para este correo.');
+    if (Date.now() > pending.expiresAt) {
+      pendingVerifications.delete(emailRaw);
+      return fail(res, 400, 'El código ha expirado. Solicita uno nuevo.');
+    }
+    if (inputCode !== pending.code) return fail(res, 400, 'Código de verificación incorrecto.');
+
+    pendingVerifications.delete(emailRaw);
+    user.email = pending.email;
+    user.email_lower = pending.email;
+    user.emailVerified = true;
+    user.updatedAt = Date.now();
+    save();
+    console.log(`[link-email] ${prettyCode(user.code)} ${user.name} vinculó ${user.email}`);
+    return ok(res, { email: user.email, emailVerified: true });
+  }
 
   if (method === 'PUT' && p === '/v1/me') {
     let b = {}; try { b = JSON.parse((await body(req, JSON_MAX)).toString('utf8') || '{}'); } catch { return fail(res, 400, 'Cuerpo inválido.'); }

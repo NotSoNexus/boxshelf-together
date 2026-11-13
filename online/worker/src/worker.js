@@ -223,7 +223,47 @@ async function route(req, env) {
   const user = await me(req, env);
   if (!user) return failR('Sesión no válida. Vuelve a entrar con tu código de amigo.', 401);
 
-  if (method === 'GET' && p === '/v1/me') return okR({ ...rowToProfile(user), favoritesList: parseArr(user.favorites) });
+  if (method === 'GET' && p === '/v1/me') return okR({ ...rowToProfile(user), email: user.email || '', emailVerified: !!user.emailVerified, favoritesList: parseArr(user.favorites) });
+
+  if (method === 'POST' && p === '/v1/me/link-email') {
+    const b = await readJson(req);
+    const emailRaw = String(b.email || '').trim().toLowerCase();
+    if (!emailRaw || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) return failR('El formato del correo electrónico no es válido.', 400);
+    try {
+      if (await env.DB.prepare('SELECT 1 FROM users WHERE email_lower=? AND code<>?').bind(emailRaw, user.code).first())
+        return failR('Ese correo electrónico ya está registrado en otra cuenta.', 409);
+    } catch {}
+    const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+    try {
+      await env.DB.prepare('INSERT OR REPLACE INTO pending_verifications (email,code,name,password,expiresAt) VALUES (?,?,?,?,?)')
+        .bind(emailRaw, verifyCode, user.code, '', Date.now() + 600000).run();
+    } catch {}
+    await sendWorkerEmail(env, emailRaw, verifyCode);
+    return okR({ pendingVerification: true, email: emailRaw });
+  }
+
+  if (method === 'POST' && p === '/v1/me/confirm-email') {
+    const b = await readJson(req);
+    const emailRaw = String(b.email || '').trim().toLowerCase();
+    const inputCode = String(b.code || '').replace(/\D/g, '');
+    let pending = null;
+    try {
+      pending = await env.DB.prepare('SELECT * FROM pending_verifications WHERE email=?').bind(emailRaw).first();
+    } catch {}
+    if (!pending || pending.name !== user.code) return failR('No hay ninguna verificación pendiente para este correo o ya expiró.', 400);
+    if (Date.now() > pending.expiresAt) {
+      try { await env.DB.prepare('DELETE FROM pending_verifications WHERE email=?').bind(emailRaw).run(); } catch {}
+      return failR('El código ha expirado. Solicita uno nuevo.', 400);
+    }
+    if (inputCode !== pending.code) return failR('Código de verificación incorrecto.', 400);
+
+    try { await env.DB.prepare('DELETE FROM pending_verifications WHERE email=?').bind(emailRaw).run(); } catch {}
+    try {
+      await env.DB.prepare('UPDATE users SET email=?, email_lower=?, emailVerified=1, updatedAt=? WHERE code=?')
+        .bind(emailRaw, emailRaw, Date.now(), user.code).run();
+    } catch {}
+    return okR({ email: emailRaw, emailVerified: true });
+  }
 
   if (method === 'PUT' && p === '/v1/me') {
     const b = await readJson(req);
