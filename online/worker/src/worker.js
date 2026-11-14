@@ -78,6 +78,7 @@ const rowToProfile = r => ({
   avatar: r.avatar || '', banner: r.banner || '',
   favorites: parseArr(r.favorites).length,
   fit: parseObj(r.fit),
+  og: r.og || '',
   totalMs: Math.max(0, +r.totalMs || 0), playing: clean(r.playing, 80) || null, createdAt: r.createdAt
 });
 const readJson = async req => { try { return await req.json(); } catch { boom('Cuerpo inválido.'); } };
@@ -122,7 +123,8 @@ async function route(req, env) {
     const srv = url.origin;
     const avatarUrl = prof.avatar ? (prof.avatar.startsWith('http') ? prof.avatar : srv + prof.avatar) : '';
     const bannerUrl = prof.banner ? (prof.banner.startsWith('http') ? prof.banner : srv + prof.banner) : '';
-    const ogImage = bannerUrl || avatarUrl;
+    const ogImage = prof.og ? (prof.og.startsWith('http') ? prof.og : srv + prof.og) : bannerUrl || avatarUrl;
+    const ogIsCard = !!prof.og; // the app's 1200x630 card: Discord shows it big, avatar and banner included
     const hRaw = (prof.totalMs || 0) / 36e5;
     const hoursText = hRaw >= 100 ? Math.round(hRaw).toLocaleString('es-ES') : String(Math.round(hRaw * 10) / 10);
     const playing = prof.playing ? clean(prof.playing, 80) : '';
@@ -155,6 +157,7 @@ async function route(req, env) {
   <meta property="og:description" content="${escAttr(embedDesc)}">
   <meta property="og:locale" content="es_ES">
   ${ogImage ? `<meta property="og:image" content="${escAttr(ogImage)}">
+  ${ogIsCard ? '<meta property="og:image:width" content="1200">\n  <meta property="og:image:height" content="630">' : ''}
   <meta property="og:image:alt" content="Foto de perfil de ${escAttr(prof.name)}">` : ''}
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escAttr(prof.name)} en Boxshelf Together">
@@ -442,13 +445,13 @@ async function route(req, env) {
     return okR({ ...rowToProfile(fresh), favoritesList: parseArr(fresh.favorites) });
   }
 
-  if (method === 'POST' && (p === '/v1/me/avatar' || p === '/v1/me/banner')) {
-    const kind = p.endsWith('avatar') ? 'avatar' : 'banner';
+  if (method === 'POST' && (p === '/v1/me/avatar' || p === '/v1/me/banner' || p === '/v1/me/og')) {
+    const kind = p.endsWith('avatar') ? 'avatar' : p.endsWith('banner') ? 'banner' : 'og';
     const buf = await req.arrayBuffer();
     const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[(req.headers.get('Content-Type') || '').split(';')[0].trim()];
     if (!ext) return failR('La imagen debe ser JPG, PNG o WebP.', 415);
     if (!buf.byteLength) return failR('Imagen vacía.');
-    if (buf.byteLength > 400 * 1024) return failR('La imagen pesa más de 400 KB. Guárdala un poco más pequeña.', 413);
+    if (buf.byteLength > (kind === 'og' ? 900 * 1024 : 400 * 1024)) return failR('La imagen pesa demasiado. Guárdala un poco más pequeña.', 413);
     const name = await sha256Buf(buf) + ext; // content-addressed: same picture, same file, KV cached by the browser
     await env.IMG.put(name, buf);
     await env.DB.prepare(`UPDATE users SET ${kind}=? WHERE code=?`).bind('/img/' + name, user.code).run();

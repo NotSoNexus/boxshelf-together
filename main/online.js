@@ -237,4 +237,10 @@ async function upload(kind, data) {
   if (!r.ok) throw new Error(r.error || 'No se pudo subir la imagen.');
   return r.data;
 }
-module.exports = { init, status, setServer, checkName, register, verifyEmail, resendCode, linkEmail, confirmEmail, setPassword, login, logout, sync, friends, add, remove, view, upload, server };
+// the 1200x630 card Discord shows: made from the same picture and banner, uploaded as any other image
+async function uploadOg(buf) {
+  const d = account();
+  if (!d || !d.token) return { ok: false };
+  return call('/v1/me/og', { method: 'POST', token: d.token, raw: { buf, type: 'image/jpeg' } });
+}
+module.exports = { init, status, setServer, checkName, register, verifyEmail, resendCode, linkEmail, confirmEmail, setPassword, login, logout, sync, friends, add, remove, view, upload, uploadOg, server };

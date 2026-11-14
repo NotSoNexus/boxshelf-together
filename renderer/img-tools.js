@@ -4,6 +4,8 @@
 /* global wum */
 wum.onModel(async job => {
   try {
+    // (beta.13) the Discord link card: banner as the background, the profile picture, name and stats on top
+    if (job.mode === 'og') { const u = await ogCard(job); wum.done(u ? null : 'no og made', u ? [u] : []); return; }
     // (beta.9) a manual page too big to show: made `w` pixels wide (decoded at that size, never in full on a canvas)
     if (job.mode === 'shrink') { const b = await createImageBitmap(new Blob([job.data]), { resizeWidth: Math.max(64, job.w | 0), resizeQuality: 'high' });
       const c = document.createElement('canvas'); c.width = b.width; c.height = b.height; c.getContext('2d').drawImage(b, 0, 0); b.close();
@@ -187,4 +189,63 @@ function cart(bmp, job) {
   g.fillStyle = sh; g.fillRect(lx, ly, lw, lh); g.restore();
   rr(lx, ly, lw, lh, lr); g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = W * .006; g.stroke();
   return c.toDataURL('image/png');
+}
+
+// The card Discord shows for a profile link: 1200x630, the banner filling it, the profile picture in a ring, the name,
+// the description and the hours / favourites / friend code as small pills. Same zoom & pan as the app for both pictures.
+async function ogCard(job) {
+  const W = 1200, H = 630, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const load = async b => { try { return b ? await createImageBitmap(new Blob([b])) : null; } catch { return null; } };
+  const [banner, avatar] = await Promise.all([load(job.data), load(job.avatar)]);
+  const F = 'Segoe UI, Lexend, Arial, sans-serif', E = 'Segoe UI Emoji, Segoe UI, Arial, sans-serif';
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  const fitOf = f => { const z = Math.min(3, Math.max(1, +f.z || 1)), lim = (z - 1) * 50, cl = n => Math.min(lim, Math.max(-lim, +n || 0)); return { z, x: cl(f.x), y: cl(f.y) }; };
+  // fill the rect with the picture (cover) and the same zoom / pan the profile editor saved
+  const cover = (img, x, y, w, h, f) => {
+    if (!img) return;
+    const q = fitOf(f || {}), s = Math.max(w / img.width, h / img.height) * q.z, dw = img.width * s, dh = img.height * s;
+    g.drawImage(img, x + (w - dw) / 2 + q.x / 100 * w, y + (h - dh) / 2 + q.y / 100 * h, dw, dh);
+  };
+  g.fillStyle = '#070c1e'; g.fillRect(0, 0, W, H);
+  if (banner) cover(banner, 0, 0, W, H, (job.fit || {}).banner);
+  // dark on the left so the text always reads, a soft shade at the bottom for depth
+  const side = g.createLinearGradient(0, 0, W, 0);
+  side.addColorStop(0, 'rgba(5,9,26,.97)'); side.addColorStop(.44, 'rgba(5,9,26,.9)'); side.addColorStop(.72, 'rgba(5,9,26,.4)'); side.addColorStop(1, 'rgba(5,9,26,.1)');
+  g.fillStyle = side; g.fillRect(0, 0, W, H);
+  const bottom = g.createLinearGradient(0, H * .6, 0, H); bottom.addColorStop(0, 'rgba(5,9,26,0)'); bottom.addColorStop(1, 'rgba(5,9,26,.85)');
+  g.fillStyle = bottom; g.fillRect(0, 0, W, H);
+  const accent = g.createLinearGradient(0, 0, 0, H); accent.addColorStop(0, '#5b8dff'); accent.addColorStop(1, '#8b5cf6');
+  g.fillStyle = accent; g.fillRect(0, 0, 7, H);
+  // brand
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillStyle = 'rgba(190,214,255,.72)'; g.font = `700 19px ${F}`;
+  try { g.letterSpacing = '4px'; } catch {} g.fillText('BOXSHELF TOGETHER', 80, 78); try { g.letterSpacing = '0px'; } catch {}
+  // profile picture in its ring
+  const AX = 80, AY = 176, AS = 158;
+  g.save(); g.beginPath(); g.arc(AX + AS / 2, AY + AS / 2, AS / 2, 0, Math.PI * 2); g.clip();
+  g.fillStyle = '#1b2b5c'; g.fillRect(AX, AY, AS, AS); cover(avatar, AX, AY, AS, AS, (job.fit || {}).avatar); g.restore();
+  g.beginPath(); g.arc(AX + AS / 2, AY + AS / 2, AS / 2 + 3, 0, Math.PI * 2); g.strokeStyle = 'rgba(255,255,255,.92)'; g.lineWidth = 5; g.stroke();
+  const cut = (t, size, weight, mw, font) => { g.font = `${weight} ${size}px ${font || F}`; t = String(t || ''); if (g.measureText(t).width <= mw) return t; while (t && g.measureText(t + '…').width > mw) t = t.slice(0, -1); return t + '…'; };
+  const maxW = W - 300;
+  g.fillStyle = '#fff'; g.fillText(cut(job.name, 62, 800, maxW), 286, 258);
+  if (job.desc) { g.fillStyle = 'rgba(185,200,230,.92)'; g.fillText(cut(job.desc, 24, 500, maxW), 288, 302); }
+  // hours / favourites pills
+  const chip = (x, y, text, icon) => {
+    g.font = `600 24px ${E}`; const w = g.measureText(icon + '  ' + text).width + 44, h = 58;
+    g.fillStyle = 'rgba(120,160,255,.14)'; rr(x, y, w, h, 16); g.fill();
+    g.strokeStyle = 'rgba(150,180,255,.26)'; g.lineWidth = 1.5; rr(x, y, w, h, 16); g.stroke();
+    g.fillStyle = '#eaf1ff'; g.textBaseline = 'middle'; g.fillText(icon + '  ' + text, x + 22, y + h / 2 + 1); g.textBaseline = 'alphabetic';
+    return w;
+  };
+  let cx = 288; const cy = 342;
+  cx += chip(cx, cy, `${job.hours} h jugadas`, '🕹️') + 14;
+  chip(cx, cy, `${job.favs} favoritos`, '⭐');
+  // friend code
+  const ct = '🆔  ' + job.code; g.font = `600 22px ui-monospace, Consolas, monospace`;
+  const cw = g.measureText(ct).width + 44;
+  g.fillStyle = 'rgba(120,160,255,.1)'; rr(288, 452, cw, 50, 14); g.fill();
+  g.strokeStyle = 'rgba(150,180,255,.24)'; g.lineWidth = 1.5; rr(288, 452, cw, 50, 14); g.stroke();
+  g.fillStyle = '#9dc0ff'; g.textBaseline = 'middle'; g.fillText(ct, 288 + 22, 478); g.textBaseline = 'alphabetic';
+  g.textAlign = 'right'; g.fillStyle = 'rgba(160,180,215,.5)'; g.font = `600 18px ${F}`; g.fillText('boxshelf-online', W - 60, H - 42); g.textAlign = 'left';
+  banner && banner.close(); avatar && avatar.close();
+  return c.toDataURL('image/jpeg', .88);
 }

@@ -967,6 +967,7 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
 
   // ---------- Boxshelf Online (perfiles y amigos; el internet va solo por aquí, la página no habla https) ----------
   online.init(profiles, config, log);
+  setTimeout(() => { try { pushOgCard(); } catch {} }, 6000); // the Discord card catches up after a restart too
   // ---------- hours follow the online account: every account keeps its own per-game history file ----------
   const digitsCode = v => String(v || '').replace(/\D/g, '');
   const currentOnlineCode = () => { try { const d = JSON.parse(fs.readFileSync(profiles.dataFile('online.json'), 'utf8')); return digitsCode(d && d.code); } catch { return ''; } };
@@ -1002,11 +1003,48 @@ handle('clipboard:write', ({ text }) => { const { clipboard } = require('electro
     const code = currentOnlineCode(), owner = readHistoryOwner(), mine = !!(code && owner && owner === code);
     return { totalMs: mine ? totalMs : 0, favorites: (mine && totalMs > 0) ? ((cfg.ui && cfg.ui.favorites) || []) : null }; // hours and favourites travel only with the account that owns them
   };
+  // ---------- the Discord card: banner + picture + name + stats, drawn by the hidden image window ----------
+  const readOgSig = () => { try { return JSON.parse(fs.readFileSync(profiles.dataFile('online.json'), 'utf8')).ogSig || ''; } catch { return ''; } };
+  const writeOgSig = sig => { try { const f = profiles.dataFile('online.json'), d = JSON.parse(fs.readFileSync(f, 'utf8')); d.ogSig = sig; fs.writeFileSync(f, JSON.stringify(d, null, 2)); } catch {} };
+  let ogBusy = null;
+  function pushOgCard() {
+    if (ogBusy) return ogBusy;
+    ogBusy = (async () => {
+      try {
+        if (!onlineOwned()) return;
+        const p = profiles.current();
+        if (!p || !p.avatar) return;
+        const data = onlineSyncData();
+        const favs = Array.isArray(data.favorites) ? data.favorites.length : 0;
+        const hours = Math.round((data.totalMs || 0) / 36e5 * 10) / 10;
+        const hoursText = hours >= 100 ? Math.round(hours).toLocaleString('es-ES') : String(hours);
+        const hash = f => { try { return require('crypto').createHash('sha256').update(fs.readFileSync(f)).digest('hex').slice(0, 16); } catch { return ''; } };
+        const code = currentOnlineCode();
+        const sig = [hash(p.avatar), hash(p.banner), JSON.stringify(p.fit || {}), p.name || '', p.description || '', hoursText, favs].join('|');
+        if (!code || sig === readOgSig()) return;
+        const r = await helperJob('img-tools.html', async () => ({
+          mode: 'og',
+          data: p.banner ? new Uint8Array(await fs.promises.readFile(p.banner)) : null,
+          avatar: new Uint8Array(await fs.promises.readFile(p.avatar)),
+          fit: p.fit || {}, name: p.name || '', desc: p.description || '',
+          hours: hoursText, favs, code: code.replace(/^(\d{4})(\d{4})(\d{4})$/, '$1-$2-$3')
+        }), 30000, false, 'og');
+        const m = !r.err && /^data:image\/jpeg;base64,(.+)$/.exec(String((r.pages || [])[0] || ''));
+        if (!m) return;
+        const up = await online.uploadOg(Buffer.from(m[1], 'base64'));
+        if (up && up.ok) writeOgSig(sig);
+      } catch (e) { log('og card', e.message); }
+      finally { ogBusy = null; }
+    })();
+    return ogBusy;
+  }
   const onlinePush = playing => {
     try {
       const p = profiles.current(), mine = onlineOwned();
       // the local name and pictures belong to the owning account too: a different one is never given them
-      return online.sync({ ...onlineSyncData(), ...(mine ? { name: p.name, avatar: p.avatar, banner: p.banner, fit: p.fit } : {}), playing });
+      return online.sync({ ...onlineSyncData(), ...(mine ? { name: p.name, avatar: p.avatar, banner: p.banner, fit: p.fit } : {}), playing })
+        .then(r => { if (r && r.ok) setTimeout(() => { try { pushOgCard(); } catch {} }, 1200); return r; })
+        .catch(e => { log('online sync', e.message); });
     } catch (e) { log('online sync', e.message); }
   };
   // ---------- presence: "Jugando a…" on the server, with a slow heartbeat that also lands the hours there ----------

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   banner      TEXT DEFAULT '',
   favorites   TEXT DEFAULT '[]',         -- JSON: lista de ids favoritos
   fit         TEXT DEFAULT '{}',         -- JSON: zoom/pan de la foto y el banner
+  og          TEXT DEFAULT '',           -- tarjeta 1200x630 que se ve en Discord (generada por la app)
   totalMs     INTEGER DEFAULT 0,
   passwordHash TEXT DEFAULT '',
   email       TEXT DEFAULT '',
