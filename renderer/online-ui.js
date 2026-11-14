@@ -207,7 +207,9 @@ function act() {
   }
   if (f === "share-link") {
     const srvUrl = srv || "https://boxshelf-online.boxshelf-justniko.workers.dev";
-    const shareUrl = `${srvUrl.replace(/\/+$/, '')}/u/${encodeURIComponent(myCode || digits(myCode))}`;
+    // a new card is a new address: Discord only reads a link once, so the share carries the card's version
+    const v = (String(myOg || "").match(/([a-f0-9]{10,})\.(?:jpe?g|png|webp)$/i) || [])[1];
+    const shareUrl = `${srvUrl.replace(/\/+$/, '')}/u/${encodeURIComponent(myCode || digits(myCode))}${v ? "?v=" + v.slice(0, 12) : ""}`;
     try {
       if (api.clipboardWrite) {
         api.clipboardWrite(shareUrl);
@@ -886,7 +888,7 @@ function startBgPresenceCheck() {
 }
 setTimeout(startBgPresenceCheck, 8000);
 
-let myCode = "";
+let myCode = "", myOg = "";
 async function render(soft) {
   if (!el) return;
   el.classList.add("on"); const prevScroll = el ? el.scrollTop : 0;
@@ -906,7 +908,7 @@ async function render(soft) {
         st.localFit = (c && c.profile && c.profile.fit) || null;
       } catch {}
       st.hours = hours; st.favs = favs.length; st.pName = pName;
-      try { st.me = (await api.onlineView(myCode)) || null; if (st.me && st.me.email) st.email = st.me.email; } catch { st.me = null; }
+      try { st.me = (await api.onlineView(myCode)) || null; myOg = (st.me && st.me.og) || ""; if (st.me && st.me.email) st.email = st.me.email; } catch { st.me = null; myOg = ""; }
     }
     let lists = null;
     if (st.registered) {
