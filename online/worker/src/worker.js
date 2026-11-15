@@ -131,14 +131,9 @@ async function route(req, env) {
     const ownDesc = clean(prof.description, 160);
     const canonical = `${srv}/u/${u.code}`;
     const boxshelfUri = `boxshelf://user/${u.code}`;
-    // The preview Discord shows. Discord only understands **bold** in link previews (backticks and ">" come out
-    // literally), so the lines are plain text with emoji and dots.
-    const embedDesc = [
-      `🕹️ **${hoursText} h** jugadas  ·  ⭐ **${prof.favorites}** favoritos`,
-      ownDesc ? `💬 ${ownDesc}` : '',
-      playing ? `🎮 Jugando ahora: **${playing}**` : '',
-      `🆔 ${prof.code}`
-    ].filter(Boolean).join('\n');
+    // The preview Discord shows: one line with personality (or the player's own description), nothing else.
+    // Discord only understands **bold** in link previews, so no backticks, quotes or lists here.
+    const embedDesc = ownDesc ? `💬 ${ownDesc}` : '🕹️ Tus juegos retro viven aquí. Tus amigos también.';
 
     const html = `<!DOCTYPE html>
 <html lang="es">
