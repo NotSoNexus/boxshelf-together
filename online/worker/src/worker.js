@@ -129,14 +129,13 @@ async function route(req, env) {
     const hoursText = hRaw >= 100 ? Math.round(hRaw).toLocaleString('es-ES') : String(Math.round(hRaw * 10) / 10);
     const playing = prof.playing ? clean(prof.playing, 80) : '';
     const ownDesc = clean(prof.description, 160);
-    const about = ownDesc || 'Tu biblioteca retro, ahora social.';
     const canonical = `${srv}/u/${u.code}`;
     const boxshelfUri = `boxshelf://user/${u.code}`;
     // The preview Discord shows. Discord only understands **bold** in link previews (backticks and ">" come out
     // literally), so the lines are plain text with emoji and dots.
     const embedDesc = [
       `🕹️ **${hoursText} h** jugadas  ·  ⭐ **${prof.favorites}** favoritos`,
-      ownDesc ? `💬 ${about}` : `📚 ${about}`,
+      ownDesc ? `💬 ${ownDesc}` : '',
       playing ? `🎮 Jugando ahora: **${playing}**` : '',
       `🆔 ${prof.code}`
     ].filter(Boolean).join('\n');
@@ -204,7 +203,7 @@ async function route(req, env) {
       <h1>${esc(prof.name)}</h1>
       <div class="code">🆔 ${esc(prof.code)}</div>
       ${playing ? `<div class="live">🎮 Jugando ahora · ${esc(playing)}</div>` : ''}
-      <p class="desc">${esc(about)}</p>
+      ${ownDesc ? `<p class="desc">${esc(ownDesc)}</p>` : ''}
       <div class="stats">
         <div class="stat"><b>${esc(hoursText)} h</b><span>Tiempo jugado</span></div>
         <div class="stat"><b>${prof.favorites}</b><span>Favoritos</span></div>
