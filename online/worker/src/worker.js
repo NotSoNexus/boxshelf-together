@@ -128,14 +128,15 @@ async function route(req, env) {
     const hRaw = (prof.totalMs || 0) / 36e5;
     const hoursText = hRaw >= 100 ? Math.round(hRaw).toLocaleString('es-ES') : String(Math.round(hRaw * 10) / 10);
     const playing = prof.playing ? clean(prof.playing, 80) : '';
-    const about = clean(prof.description || 'Jugador en Boxshelf Together', 160);
+    const ownDesc = clean(prof.description, 160);
+    const about = ownDesc || 'Tu biblioteca retro, ahora social.';
     const canonical = `${srv}/u/${u.code}`;
     const boxshelfUri = `boxshelf://user/${u.code}`;
     // The preview Discord shows. Discord only understands **bold** in link previews (backticks and ">" come out
     // literally), so the lines are plain text with emoji and dots.
     const embedDesc = [
       `🕹️ **${hoursText} h** jugadas  ·  ⭐ **${prof.favorites}** favoritos`,
-      about ? `💬 ${about}` : '',
+      ownDesc ? `💬 ${about}` : `📚 ${about}`,
       playing ? `🎮 Jugando ahora: **${playing}**` : '',
       `🆔 ${prof.code}`
     ].filter(Boolean).join('\n');
